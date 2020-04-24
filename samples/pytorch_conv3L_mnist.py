@@ -11,14 +11,15 @@
 #-----------------------------------------------------------------------------
 
 import torch
+
 from dcll.pytorch_libdcll import Conv2dDCLLlayer, DenseDCLLlayer, device, DCLLClassification
 from dcll.experiment_tools import mksavedir, save_source, annotate
 from dcll.pytorch_utils import grad_parameters, named_grad_parameters, NetworkDumper, tonumpy
+
 import timeit
 import pickle
 import numpy as np
 import os
-
 import argparse
 
 
@@ -28,7 +29,6 @@ def parse_args():
     parser.add_argument('--batch_size_test', type=int, default=512, metavar='N', help='input batch size for testing')
     parser.add_argument('--n_epochs', type=int, default=10000, metavar='N', help='number of epochs to train')
     parser.add_argument('--no_save', type=bool, default=False, metavar='N', help='disables saving into Results directory')
-    #parser.add_argument('--no-cuda', action='store_true', default=False, help='enables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed')
     parser.add_argument('--n_test_interval', type=int, default=20, metavar='N', help='how many epochs to run before testing')
     parser.add_argument('--n_test_samples', type=int, default=1024, metavar='N', help='how many test samples to use')
@@ -42,10 +42,8 @@ def parse_args():
     parser.add_argument('--beta', type=float, default=.95, metavar='N', help='Beta2 parameters for Adamax')
     parser.add_argument('--lc_ampl', type=float, default=.5, metavar='N', help='magnitude of local classifier init')
     parser.add_argument('--netscale', type=float, default=1., metavar='N', help='scale network size')
-    parser.add_argument('--comment', type=str, default='',
-                        help='comment to name tensorboard files')
-    parser.add_argument('--output', type=str, default='Results_mnist/',
-                        help='folder name for the results')
+    parser.add_argument('--comment', type=str, default='', help='comment to name tensorboard files')
+    parser.add_argument('--output', type=str, default='Results_mnist/', help='folder name for the results')
     return parser.parse_args()
 
 class ReferenceConvNetwork(torch.nn.Module):
@@ -175,12 +173,12 @@ class ConvNetwork(torch.nn.Module):
         return [ s.accuracy(labels) for s in self.dcll_slices]
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     args = parse_args()
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    import datetime,socket,os
+    import datetime, socket
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
     log_dir = os.path.join('runs/', 'pytorch_conv3L_mnist_', current_time + '_' + socket.gethostname() +'_' + args.comment, )
     print(log_dir)
@@ -188,12 +186,13 @@ if __name__ == "__main__":
     n_iters = 500
     n_iters_test = args.n_iters_test
     im_dims = (1, 28, 28)
+    input_size = np.prod(im_dims)
     target_size = 10
     # number of test samples: n_test * batch_size_test
     n_test = np.ceil(float(args.n_test_samples)/args.batch_size_test).astype(int)
 
     opt = torch.optim.Adamax
-    opt_param = {'lr':args.lr, 'betas' : [.0, args.beta]}
+    opt_param = {'lr': args.lr, 'betas': [.0, args.beta]}
 
     # loss = torch.nn.CrossEntropyLoss
     loss = torch.nn.SmoothL1Loss
@@ -229,21 +228,22 @@ if __name__ == "__main__":
     acc_test = np.empty([n_tests_total, n_test, len(net.dcll_slices)])
     acc_test_ref = np.empty([n_tests_total, n_test])
 
-    from data.load_mnist_pytorch import *
-    train_data = get_mnist_loader(args.batch_size, train=True, perm=0., Nparts=1, part=0, seed=0, taskid=0, pre_processed=True)
+    from data.load_mnist import get_mnist_loader
+    from data.utils import to_one_hot, image2spiketrain
+    train_data = get_mnist_loader(args.batch_size, train=True, part=0, taskid=0)
     gen_train = iter(train_data)
-    gen_test = iter(get_mnist_loader(args.batch_size_test, train=False, perm=0., Nparts=1, part=1, seed=0, taskid=0, pre_processed=True))
+    gen_test = iter(get_mnist_loader(args.batch_size_test, train=False, part=1, taskid=0))
 
     all_test_data = [ next(gen_test) for i in range(n_test) ]
     all_test_data = [ (samples, to_one_hot(labels, 10)) for (samples, labels) in all_test_data ]
 
     for epoch in range(args.n_epochs):
-        if ((epoch+1)%1000)==0:
-            net.dcll_slices[0].optimizer.param_groups[-1]['lr']/=2
-            net.dcll_slices[1].optimizer.param_groups[-1]['lr']/=2
-            net.dcll_slices[2].optimizer.param_groups[-1]['lr']/=2
-            net.dcll_slices[2].optimizer2.param_groups[-1]['lr']/=2
-            ref_net.optim.param_groups[-1]['lr']/=2
+        if ((epoch + 1) % 1000) == 0:
+            net.dcll_slices[0].optimizer.param_groups[-1]['lr'] /= 2
+            net.dcll_slices[1].optimizer.param_groups[-1]['lr'] /= 2
+            net.dcll_slices[2].optimizer.param_groups[-1]['lr'] /= 2
+            net.dcll_slices[2].optimizer2.param_groups[-1]['lr'] /= 2
+            ref_net.optim.param_groups[-1]['lr'] /= 2
             print("Adjusting learning rates")
 
         try:
@@ -255,15 +255,14 @@ if __name__ == "__main__":
         labels = to_one_hot(labels, 10)
 
         input_spikes, labels_spikes = image2spiketrain(input, labels,
+                                                       input_size=input_size,
                                                        min_duration=n_iters-1,
                                                        max_duration=n_iters,
                                                        gain=100)
         input_spikes = torch.Tensor(input_spikes).to(device)
         labels_spikes = torch.Tensor(labels_spikes).to(device)
 
-        ref_input = torch.Tensor(input).to(device).reshape(
-            -1, *im_dims
-        )
+        ref_input = torch.Tensor(input).to(device).reshape(-1, *im_dims)
         ref_label = torch.Tensor(labels).to(device)
 
         net.reset()
@@ -276,8 +275,8 @@ if __name__ == "__main__":
 
         if (epoch % args.n_test_interval)==0:
             for i, test_data in enumerate(all_test_data):
-
                 test_input, test_labels = image2spiketrain(*test_data,
+                                                           input_size=input_size,
                                                            min_duration=n_iters_test-1,
                                                            max_duration=n_iters_test,
                                                            gain=100)
@@ -288,9 +287,7 @@ if __name__ == "__main__":
                     raise
 
                 test_labels1h = torch.Tensor(test_labels).to(device)
-                test_ref_input = torch.Tensor(test_data[0]).to(device).reshape(
-                    -1, *im_dims
-                )
+                test_ref_input = torch.Tensor(test_data[0]).to(device).reshape(-1, *im_dims)
                 test_ref_label = torch.Tensor(test_data[1]).to(device)
 
                 net.reset()
