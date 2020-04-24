@@ -186,7 +186,6 @@ if __name__ == '__main__':
     n_iters = 500
     n_iters_test = args.n_iters_test
     im_dims = (1, 28, 28)
-    input_size = np.prod(im_dims)
     target_size = 10
     # number of test samples: n_test * batch_size_test
     n_test = np.ceil(float(args.n_test_samples)/args.batch_size_test).astype(int)
@@ -230,12 +229,12 @@ if __name__ == '__main__':
 
     from data.load_mnist import get_mnist_loader
     from data.utils import to_one_hot, image2spiketrain
-    train_data = get_mnist_loader(args.batch_size, train=True, part=0, taskid=0)
+    train_data = get_mnist_loader(args.batch_size, train=True, taskid=0)
     gen_train = iter(train_data)
-    gen_test = iter(get_mnist_loader(args.batch_size_test, train=False, part=1, taskid=0))
+    gen_test = iter(get_mnist_loader(args.batch_size_test, train=False, taskid=1))
 
     all_test_data = [ next(gen_test) for i in range(n_test) ]
-    all_test_data = [ (samples, to_one_hot(labels, 10)) for (samples, labels) in all_test_data ]
+    all_test_data = [ (samples, to_one_hot(labels, target_size)) for (samples, labels) in all_test_data ]
 
     for epoch in range(args.n_epochs):
         if ((epoch + 1) % 1000) == 0:
@@ -252,10 +251,11 @@ if __name__ == '__main__':
             gen_train = iter(train_data)
             input, labels = next(gen_train)
 
-        labels = to_one_hot(labels, 10)
+        labels = to_one_hot(labels, target_size)
 
         input_spikes, labels_spikes = image2spiketrain(input, labels,
-                                                       input_size=input_size,
+                                                       input_shape=im_dims,
+                                                       target_size=target_size,
                                                        min_duration=n_iters-1,
                                                        max_duration=n_iters,
                                                        gain=100)
@@ -276,7 +276,8 @@ if __name__ == '__main__':
         if (epoch % args.n_test_interval)==0:
             for i, test_data in enumerate(all_test_data):
                 test_input, test_labels = image2spiketrain(*test_data,
-                                                           input_size=input_size,
+                                                           input_shape=im_dims,
+                                                           target_size=target_size,
                                                            min_duration=n_iters_test-1,
                                                            max_duration=n_iters_test,
                                                            gain=100)

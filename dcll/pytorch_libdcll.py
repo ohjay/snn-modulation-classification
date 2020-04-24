@@ -75,7 +75,7 @@ class CLLDenseModule(nn.Module):
             self.output_act = lambda x: (x>0).float()
         else:
             self.output_act = lambda x: x
-        
+
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.weight.size(1))
         self.weight.data.uniform_(-stdv*1e-2, stdv*1e-2)
@@ -90,12 +90,12 @@ class CLLDenseModule(nn.Module):
         if self.random_tau:
             self.randomize_tau()
         return self.state
-    
+
     def randomize_tau(self, low=[5,5], high=[10,35]):
         taum = np.random.uniform(low[1], high[1], size = [self.in_channels])*1e-3
         taus = np.random.uniform(low[0], high[0], size = [self.in_channels])*1e-3
         self.alpha = torch.nn.Parameter(torch.Tensor(1-1e-3/taum).to(device), requires_grad = False)
-        self.tau_m__dt = torch.nn.Parameter(1./(1-self.alpha), requires_grad = False) 
+        self.tau_m__dt = torch.nn.Parameter(1./(1-self.alpha), requires_grad = False)
         self.alphas = torch.nn.Parameter(torch.Tensor(1-1e-3/taus).to(device), requires_grad = False)
         self.tau_s__dt = torch.nn.Parameter(1./(1-self.alphas), requires_grad = False)
 
@@ -121,7 +121,7 @@ class CLLDenseModule(nn.Module):
 
 class CLLDenseRRPModule(CLLDenseModule):
     NeuronState = namedtuple('NeuronState', ('eps0', 'eps1', 'arp'))
-    
+
     def __init__(self, in_channels, out_channels, bias=True, alpha = .95, alphas=.9, alpharp = .65, wrp = 100, act = nn.Sigmoid(), spiking = True, random_tau = False):
         super(CLLDenseRRPModule, self).__init__(in_channels, out_channels, bias, alpha, alphas, act, spiking = spiking, random_tau = random_tau)
         self.wrp=wrp
@@ -134,7 +134,7 @@ class CLLDenseRRPModule(CLLDenseModule):
             arp = torch.zeros(batch_size, self.out_channels).to(device) + init_value,
         )
         return self.state
-    
+
 
     def forward(self, input):
         # input: input tensor of shape (minibatch x in_channels x iH x iW)
@@ -147,7 +147,7 @@ class CLLDenseRRPModule(CLLDenseModule):
         eps0 = input*self.tau_s__dt + self.alphas * self.state.eps0
         eps1 = self.alpha * self.state.eps1 + eps0*self.tau_m__dt
         pvmem = F.linear(eps1, self.weight, self.bias)
-        arp     = self.alpharp*self.state.arp 
+        arp     = self.alpharp*self.state.arp
         outpvmem = pvmem+arp
         output = (outpvmem>0).float()
         pv = self.act(outpvmem)
@@ -233,7 +233,7 @@ class DenseDCLLlayerDiscrete(DenseDCLLlayer):
     def forward(self, input):
         input   = input.view(-1,self.in_channels)
         output, pv, pvmem = self.i2h(input)
-        pvoutput = self.dropout(soft_threshold(self.i2o(pv)))                
+        pvoutput = self.dropout(soft_threshold(self.i2o(pv)))
         return output, pvoutput, pv, pvmem
 
 class AnalogDenseDCLLlayer(nn.Module):
@@ -282,7 +282,10 @@ class ContinuousConv2D(nn.Module):
 
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size, kernel_size)
-    
+
+        if isinstance(padding, int):
+            padding = (padding, padding)
+
         self.random_tau = random_tau
         self.kernel_size = kernel_size
         self.stride = stride
@@ -320,32 +323,31 @@ class ContinuousConv2D(nn.Module):
     def get_output_shape(self, im_dims):
         im_height = im_dims[0]
         im_width = im_dims[1]
-        height = ((im_height+2*self.padding-self.dilation*(self.kernel_size[0]-1)-1)//self.stride+1)
-        weight = ((im_width+2*self.padding-self.dilation*(self.kernel_size[1]-1)-1)//self.stride+1)
+        height = ((im_height+2*self.padding[0]-self.dilation*(self.kernel_size[0]-1)-1)//self.stride+1)
+        weight = ((im_width+2*self.padding[1]-self.dilation*(self.kernel_size[1]-1)-1)//self.stride+1)
         return height,weight
 
-    def init_state(self, batch_size, im_dims, init_value = 0):
+    def init_state(self, batch_size, im_dims, init_value=0):
         input_shape = [batch_size, self.in_channels, im_dims[0], im_dims[1]]
-        isyn_shape =  torch.Size([batch_size]) + self.get_output_shape(im_dims)
 
         self.state = self.NeuronState(
             eps0 = torch.zeros(input_shape).detach().to(device)+init_value,
             eps1 = torch.zeros(input_shape).detach().to(device)+init_value
-            )
-        
+        )
+
         if self.random_tau:
             self.randomize_tau(im_dims)
             self.random_tau=False
 
         return self.state
-    
+
     def randomize_tau(self, im_dims, low=[5,5], high=[10,35]):
         taum = np.random.uniform(low[1], high[1], size = [self.in_channels])*1e-3
         taus = np.random.uniform(low[0], high[0], size = [self.in_channels])*1e-3
-        taum = np.broadcast_to(taum, (im_dims[0], im_dims[1], self.in_channels)).transpose(2,1,0)
-        taus = np.broadcast_to(taus, (im_dims[0], im_dims[1], self.in_channels)).transpose(2,1,0)
+        taum = np.broadcast_to(taum, (im_dims[0], im_dims[1], self.in_channels)).transpose(2,0,1)
+        taus = np.broadcast_to(taus, (im_dims[0], im_dims[1], self.in_channels)).transpose(2,0,1)
         self.alpha = torch.nn.Parameter(torch.Tensor(1-1e-3/taum).to(device), requires_grad = False)
-        self.tau_m__dt = torch.nn.Parameter(1./(1-self.alpha), requires_grad = False) 
+        self.tau_m__dt = torch.nn.Parameter(1./(1-self.alpha), requires_grad = False)
         self.alphas = torch.nn.Parameter(torch.Tensor(1-1e-3/taus).to(device), requires_grad = False)
         self.tau_s__dt = torch.nn.Parameter(1./(1-self.alphas), requires_grad = False)
 
@@ -357,11 +359,8 @@ class ContinuousConv2D(nn.Module):
                             .format(self.state.eps0.shape[0], input.shape[0]))
             self.init_state(input.shape[0], input.shape[2:4])
 
-       # isyn = F.conv2d(input, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
-       # isyn += self.alphas*self.state.isyn
-       # vmem = self.alpha*self.state.vmem + isyn
-        eps0 = input*self.tau_s__dt + self.alphas * self.state.eps0
-        eps1 = self.alpha * self.state.eps1 + eps0*self.tau_m__dt
+        eps0 = input * self.tau_s__dt + self.alphas * self.state.eps0
+        eps1 = self.alpha * self.state.eps1 + eps0 * self.tau_m__dt
         pvmem = F.conv2d(eps1, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
         pv = self.act(pvmem)
         output = self.output_act(pvmem)
@@ -392,7 +391,7 @@ class ContinuousRelativeRefractoryConv2D(ContinuousConv2D):
             alphas=.9,
             alpharp = .65,
             wrp = 1,
-            act = nn.Sigmoid(), 
+            act = nn.Sigmoid(),
             random_tau=False,
             **kwargs):
         '''
@@ -426,7 +425,7 @@ class ContinuousRelativeRefractoryConv2D(ContinuousConv2D):
             self.random_tau=True
 
         return self.state
-    
+
     def forward(self, input):
         # input: input tensor of shape (minibatch x in_channels x iH x iW)
         # weight: filters of shape (out_channels x (in_channels / groups) x kH x kW)
@@ -435,16 +434,13 @@ class ContinuousRelativeRefractoryConv2D(ContinuousConv2D):
                             .format(self.state.eps0.shape[0], input.shape[0]))
             self.init_state(input.shape[0], input.shape[2:4])
 
-#         eps0 = input + self.alphas * self.state.eps0
-#         eps1 = self.alpha * self.state.eps1 + eps0
         eps0 = input*self.tau_s__dt + self.alphas * self.state.eps0
         eps1 = self.alpha * self.state.eps1 + eps0*self.tau_m__dt
         pvmem = F.conv2d(eps1, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
-        arp     = self.alpharp*self.state.arp 
+        arp     = self.alpharp*self.state.arp
         outpvmem = pvmem+arp
         output = (outpvmem>0).float()
         pv = self.act(outpvmem)
-        #pv = self.act(outpvmem)
         if not self.spiking: raise Exception('Refractory not allowed in non-spiking mode')
         arp -= output*self.wrp
         self.state = self.NeuronState(
@@ -538,12 +534,12 @@ class Conv2dDCLLlayer(nn.Module):
         output, pv = self.pool(output), self.pool(pv)
         flatten = pv.view(pv.shape[0], -1)
         pvoutput = self.dropout(self.i2o(flatten))
-        
+
         if self.output_layer:
             custom_output = self.output_(flatten.detach())
         else:
             custom_output = output
-            
+
         return custom_output, pvoutput, pv, pvmem
 
     def init_hiddens(self, batch_size, init_value = 0):
@@ -628,9 +624,9 @@ class DCLLBase(nn.Module):
         output, pvoutput, pv, pvmem = self.forward(input)
         if self.iter>=self.burnin:
             self.dclllayer.zero_grad()
-            tgt_loss = self.crit(pvoutput, target) 
+            tgt_loss = self.crit(pvoutput, target)
             if self.dclllayer.output_layer:
-                out_loss = self.output_crit(output, target.argmax(-1)) 
+                out_loss = self.output_crit(output, target.argmax(-1))
                 tgt_loss += out_loss
             if regularize>0:
                 reg_loss = 200e-1*regularize*torch.mean(torch.relu(pvmem+.01))
@@ -649,7 +645,7 @@ class DCLLBase(nn.Module):
 
 class DCLLClassification(DCLLBase):
     def forward(self, input):
-        o, p, pv, pvmem = super(DCLLClassification, self).forward(input)        
+        o, p, pv, pvmem = super(DCLLClassification, self).forward(input)
         if self.iter>=self.burnin:
             if self.dclllayer.output_layer:
                 self.clout.append(o.argmax(1).detach().cpu().numpy())
