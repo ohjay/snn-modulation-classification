@@ -55,8 +55,10 @@ class RadioMLDataset(data.Dataset):
 def get_radio_ml_loader(batch_size, train, taskid=0, **loader_kwargs):
     data_dir = '/media/owen/ba9d40b5-89de-4832-bad4-156b118e4a66/2018.01'
     dataset = RadioMLDataset(data_dir, train, normalize=True)
+    print('dataset size: %d' % len(dataset))
 
-    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=train, **loader_kwargs)
+    loader = DataLoader(dataset=dataset, batch_size=batch_size,
+                        shuffle=train, **loader_kwargs)
     loader.taskid = taskid
     loader.name = 'RadioML_{}'.format(taskid)
     loader.short_name = 'RadioML'

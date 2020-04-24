@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # File Name : experiment_tools.py
 # Author: Emre Neftci
 #
@@ -8,18 +8,21 @@
 #
 # Copyright : (c) UC Regents, Emre Neftci
 # Licence : Apache License, Version 2.0
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 import numpy as np
+
 
 def accuracy(model, x_test, y_test):
     t = model.predict(x_test)
     return 1-(t.argmax(axis=1) == y_test.argmax(axis=1)).mean()
 
+
 def annotate(d, text='', filename='notes.txt'):
     "Create a file in the Results directory, with contents text"
-    f = open(d + '/' +filename, 'w')
+    f = open(d + '/' + filename, 'w')
     f.write(text)
     f.close()
+
 
 def save(directory, obj=None, filename='default.pkl'):
     import pickle
@@ -38,11 +41,13 @@ def save(directory, obj=None, filename='default.pkl'):
         f.close()
     return None
 
+
 def save_source(directory):
     """
     Save all the python scripts from the current directory into the results directory
     """
-    import tarfile, glob
+    import tarfile
+    import glob
     h = tarfile.open(directory + '/exp_scripts.tar.bz2', 'w:bz2')
     all_src = []
     all_src += glob.glob('*.py')

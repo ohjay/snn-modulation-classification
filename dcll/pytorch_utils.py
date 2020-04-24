@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import torchvision.utils as vutils
 import matplotlib.animation as animation
 
+
 def enforce_1_or_3_channels(im):
     if im.shape[0] == 2:
         pad = torch.zeros(1, im.shape[1], im.shape[2])
@@ -15,14 +16,18 @@ def enforce_1_or_3_channels(im):
     else:
         raise NotImplementedError
 
+
 def tonumpy(x):
     return x.detach().cpu().numpy()
+
 
 def grad_parameters(module):
     return list(filter(lambda p: p.requires_grad, module.parameters()))
 
+
 def named_grad_parameters(module):
     return list(filter(lambda p: p[1].requires_grad, module.named_parameters()))
+
 
 def roll(tensor, shift, axis):
     if shift == 0:
@@ -41,12 +46,13 @@ def roll(tensor, shift, axis):
     after = tensor.narrow(axis, after_start, shift)
     return torch.cat([after, before], axis)
 
+
 def make_video_from_frames(frames, interval=30, title="animation", filename="animation.mp4", **kwargs):
     anim_writer = animation.writers['ffmpeg'](fps=30)
     ani_fig, ani_ax = plt.subplots()
     ani_ax.axis('off')
     ani_ax.set_title(title)
-    ani_fig.set_size_inches([5,5])
+    ani_fig.set_size_inches([5, 5])
     ani_im = ani_ax.imshow(frames[0],
                            animated=True, cmap='viridis',
                            **kwargs)
@@ -55,12 +61,14 @@ def make_video_from_frames(frames, interval=30, title="animation", filename="ani
         ani_im.set_data(frames[i])
         return ani_im
 
-    ani = animation.FuncAnimation(ani_fig, ani_update, len(frames), interval=interval)
+    ani = animation.FuncAnimation(
+        ani_fig, ani_update, len(frames), interval=interval)
     ani.save(filename, writer=anim_writer, dpi=100)
     plt.close(ani_fig)
 
+
 class ForwardHook(object):
-    def __init__(self, writer, title, initial_time, debounce_img = 150):
+    def __init__(self, writer, title, initial_time, debounce_img=150):
         self.writer = writer
         self.title = title
         self.recording_time = initial_time
@@ -74,13 +82,18 @@ class ForwardHook(object):
 
         # write the data wrt datatype
         if isinstance(data, dict):
-            self.writer.add_scalars(self.title + comment, data, self.recording_time)
-        elif isinstance(data, torch.Tensor) and len(data.shape) == 1 and data.shape[0] == 1: # single value
-            self.writer.add_scalar(self.title + comment, data, self.recording_time)
+            self.writer.add_scalars(
+                self.title + comment, data, self.recording_time)
+        # single value
+        elif isinstance(data, torch.Tensor) and len(data.shape) == 1 and data.shape[0] == 1:
+            self.writer.add_scalar(self.title + comment,
+                                   data, self.recording_time)
         elif isinstance(data, torch.Tensor):
             if self.recording_time % self.debounce == 0:
-                img = vutils.make_grid(data.unsqueeze(dim=1) / torch.max(data)) # grey color channel
-                self.writer.add_image(self.title + comment, img, self.recording_time)
+                img = vutils.make_grid(data.unsqueeze(
+                    dim=1) / torch.max(data))  # grey color channel
+                self.writer.add_image(
+                    self.title + comment, img, self.recording_time)
         else:
             raise NotImplementedError
 
@@ -89,8 +102,10 @@ class ForwardHook(object):
         if not isinstance(layer_debug, list):
             self.write_data(layer_debug)
         else:
-            [ self.write_data(d, comment='_idx_'+str(i)) for i, d in enumerate(layer_debug) ]
+            [self.write_data(d, comment='_idx_'+str(i))
+             for i, d in enumerate(layer_debug)]
         self.recording_time += 1
+
 
 class NetworkDumper(object):
     def __init__(self, writer, model):
@@ -103,6 +118,7 @@ class NetworkDumper(object):
             self.writer.add_histogram(prefix+name,
                                       param.cpu().detach().numpy().flatten(),
                                       t)
+
     def weight2d(self, prefix="", t=0):
         params = self.model.named_parameters()
         # filter out all params that don't correspond to convolutions (KCHW)
@@ -110,13 +126,15 @@ class NetworkDumper(object):
                              ((p[1].shape[1] == 1) or
                               (p[1].shape[1] == 2) or
                               (p[1].shape[1] == 3)), params))
+
         def enforce_1_or_3_channels(p):
             if not p[1].shape[1] == 2:
                 return p
             else:
-                pad = torch.zeros(p[1].shape[0], 1, p[1].shape[2], p[1].shape[3])
-                new_p = ( p[0],
-                          torch.cat((p[1].cpu(), pad), dim=1) )
+                pad = torch.zeros(p[1].shape[0], 1,
+                                  p[1].shape[2], p[1].shape[3])
+                new_p = (p[0],
+                         torch.cat((p[1].cpu(), pad), dim=1))
                 return new_p
 
         params = list(map(enforce_1_or_3_channels, params))
@@ -137,7 +155,8 @@ class NetworkDumper(object):
         params = named_grad_parameters(self.model)
         for i, (name, param) in enumerate(params):
             self.writer.add_histogram(prefix+'delta_'+name,
-                                      param.cpu().detach().numpy().flatten() - self.cached[i],
+                                      param.cpu().detach().numpy().flatten() -
+                                      self.cached[i],
                                       t)
 
     def start_recording(self, title="forward_data", t=0):
