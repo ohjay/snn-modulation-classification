@@ -9,6 +9,7 @@
 # Copyright : (c) UC Regents, Emre Neftci
 # Licence : Apache License, Version 2.0
 #-----------------------------------------------------------------------------
+
 import torch
 from dcll.pytorch_libdcll import Conv2dDCLLlayer, DenseDCLLlayer, device, DCLLClassification
 from dcll.experiment_tools import mksavedir, save_source, annotate
@@ -228,7 +229,7 @@ if __name__ == "__main__":
     acc_test = np.empty([n_tests_total, n_test, len(net.dcll_slices)])
     acc_test_ref = np.empty([n_tests_total, n_test])
 
-    from dcll.load_mnist_pytorch import *
+    from data.load_mnist_pytorch import *
     train_data = get_mnist_loader(args.batch_size, train=True, perm=0., Nparts=1, part=0, seed=0, taskid=0, pre_processed=True)
     gen_train = iter(train_data)
     gen_test = iter(get_mnist_loader(args.batch_size_test, train=False, perm=0., Nparts=1, part=1, seed=0, taskid=0, pre_processed=True))
