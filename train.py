@@ -76,16 +76,17 @@ class ReferenceConvNetwork(torch.nn.Module):
             return (layer, [conf[0]])
 
         n = im_dims
-        self.layer1, n = make_conv(n, convs[0])
-        self.layer2, n = make_conv(n, convs[1])
-        self.layer3, n = make_conv(n, convs[2])
+        self.num_layers = len(convs)
+        self.layers = torch.nn.ModuleList()
+        for i in range(self.num_layers):
+            layer, n = make_conv(n, convs[i])
+            self.layers.append(layer)
 
         def latent_size():
             with torch.no_grad():
                 x = torch.zeros(im_dims).unsqueeze(0).to(device)
-                x = self.layer1(x)
-                x = self.layer2(x)
-                x = self.layer3(x)
+                for layer in self.layers:
+                    x = layer(x)
             return x.shape[1:]
 
         # Should we train linear decoders? They are not in DCLL
@@ -97,9 +98,8 @@ class ReferenceConvNetwork(torch.nn.Module):
         self.crit = loss().to(device)
 
     def forward(self, x):
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
+        for layer in self.layers:
+            x = layer(x)
         x = self.linear(x.view(x.shape[0], -1))
         return x
 
@@ -148,14 +148,16 @@ class ConvNetwork(torch.nn.Module):
             return layer, torch.Size([layer.out_channels]) + layer.output_shape
 
         n = im_dims
-
-        self.layer1, n = make_conv(n, convs[0])
-        self.layer2, n = make_conv(n, convs[1])
-        self.layer3, n = make_conv(n, convs[2], True)
+        self.num_layers = len(convs)
+        self.layers = torch.nn.ModuleList()
+        for i in range(self.num_layers):
+            is_output_layer = (i == self.num_layers - 1)
+            layer, n = make_conv(n, convs[i], is_output_layer)
+            self.layers.append(layer)
 
         self.dcll_slices = []
-        for layer, name in zip([self.layer1, self.layer2, self.layer3],
-                               ['conv1', 'conv2', 'conv3']):
+        for i, layer in enumerate(self.layers):
+            name = 'conv%d' % i
             self.dcll_slices.append(
                 DCLLSlice(
                     dclllayer=layer,
@@ -170,8 +172,8 @@ class ConvNetwork(torch.nn.Module):
 
     def learn(self, x, labels):
         spikes = x
-        for i, sl in enumerate(self.dcll_slices):
-            spikes, _, pv, _, _ = sl.train_dcll(
+        for sl in self.dcll_slices:
+            spikes, _, _, _, _ = sl.train_dcll(
                 spikes, labels, regularize=False)
 
     def test(self, x):
@@ -219,7 +221,9 @@ if __name__ == '__main__':
         # format: (out_channels, kernel_size, padding, pooling)
         convs = [(16, (7, 1), (2, 0), 1),
                  (24, (7, 1), (2, 0), 1),
-                 (32, (7, 1), (2, 0), 1)]
+                 (32, (7, 1), (2, 0), 1),
+                 (40, (7, 1), (2, 0), 1),
+                 (48, (7, 1), (2, 0), 1)]
 
         from data.load_radio_ml import get_radio_ml_loader as get_loader
 
