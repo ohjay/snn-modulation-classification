@@ -1,0 +1,15 @@
+conv_layers:
+  - out_channels: 16
+    kernel_size: 7
+    padding: 2
+    pooling: 2
+
+  - out_channels: 24
+    kernel_size: 7
+    padding: 2
+    pooling: 1
+
+  - out_channels: 32
+    kernel_size: 7
+    padding: 2
+    pooling: 2

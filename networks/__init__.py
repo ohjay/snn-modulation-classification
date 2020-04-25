@@ -1,7 +1,20 @@
+import yaml
 import torch
 import numpy as np
+from ast import literal_eval as make_tuple
 
 from dcll.pytorch_libdcll import Conv2dDCLLlayer, DenseDCLLlayer, device, DCLLClassification
+
+
+def load_network_spec(yaml_path):
+    network_spec = yaml.load(open(yaml_path, 'r'))
+    convs = network_spec['conv_layers']
+    for layer_idx, layer_spec in enumerate(convs):
+        for k, v in layer_spec.items():
+            if type(v) != int:
+                # convert e.g. the string "(2, 0)" to the tuple (2, 0)
+                convs[layer_idx][k] = make_tuple(v)
+    return convs
 
 
 class ReferenceConvNetwork(torch.nn.Module):
@@ -9,17 +22,22 @@ class ReferenceConvNetwork(torch.nn.Module):
         super(ReferenceConvNetwork, self).__init__()
 
         def make_conv(inp, conf):
+            out_channels = conf['out_channels']
+            kernel_size  = conf['kernel_size']
+            padding      = conf['padding']
+            pooling      = conf['pooling']
+
             layer = torch.nn.Sequential(
                 torch.nn.Conv2d(in_channels=inp[0],
-                                out_channels=int(conf[0] * args.netscale),
-                                kernel_size=conf[1],
-                                padding=conf[2]),
+                                out_channels=int(out_channels * args.netscale),
+                                kernel_size=kernel_size,
+                                padding=padding),
                 torch.nn.ReLU(),
                 torch.nn.MaxPool2d(
-                    kernel_size=conf[3], stride=conf[3], padding=(conf[3]-1)//2)
+                    kernel_size=pooling, stride=pooling, padding=(pooling-1)//2)
             )
             layer = layer.to(device)
-            return (layer, [conf[0]])
+            return (layer, [out_channels])
 
         n = im_dims
         self.num_layers = len(convs)
@@ -80,8 +98,16 @@ class ConvNetwork(torch.nn.Module):
         self.batch_size = batch_size
 
         def make_conv(inp, conf, is_output_layer=False):
-            layer = Conv2dDCLLlayer(in_channels=inp[0], out_channels=int(conf[0] * args.netscale),
-                                    kernel_size=conf[1], padding=conf[2], pooling=conf[3],
+            out_channels = conf['out_channels']
+            kernel_size  = conf['kernel_size']
+            padding      = conf['padding']
+            pooling      = conf['pooling']
+
+            layer = Conv2dDCLLlayer(in_channels=inp[0],
+                                    out_channels=int(out_channels * args.netscale),
+                                    kernel_size=kernel_size,
+                                    padding=padding,
+                                    pooling=pooling,
                                     im_dims=inp[1:3],  # height, width
                                     target_size=target_size,
                                     alpha=args.alpha, alphas=args.alphas, alpharp=args.alpharp,

@@ -8,13 +8,15 @@ from dcll.pytorch_libdcll import device
 from dcll.experiment_tools import mksavedir, save_source, annotate
 from dcll.pytorch_utils import grad_parameters, named_grad_parameters, NetworkDumper, tonumpy
 
-from networks import ConvNetwork, ReferenceConvNetwork
+from networks import ConvNetwork, ReferenceConvNetwork, load_network_spec
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='DCLL')
     parser.add_argument('--data', type=str, default='RadioML',
                         choices=['MNIST', 'RadioML'], help='which data to use')
+    parser.add_argument('--network_spec', type=str, default='networks/radio_ml_conv.yaml',
+                        metavar='S', help='path to YAML file describing net architecture')
     parser.add_argument('--batch_size', type=int, default=64,
                         metavar='N', help='input batch size for training')
     parser.add_argument('--batch_size_test', type=int, default=64,
@@ -71,25 +73,11 @@ if __name__ == '__main__':
     if args.data == 'MNIST':
         im_dims = (1, 28, 28)
         target_size = 10
-
-        # format: (out_channels, kernel_size, padding, pooling)
-        convs = [(16, 7, 2, 2),
-                 (24, 7, 2, 1),
-                 (32, 7, 2, 2)]
-
         from data.load_mnist import get_mnist_loader as get_loader
 
     elif args.data == 'RadioML':
         im_dims = (1, 1024, 2)
         target_size = 24
-
-        # format: (out_channels, kernel_size, padding, pooling)
-        convs = [(16, (7, 1), (2, 0), 1),
-                 (24, (7, 1), (2, 0), 1),
-                 (32, (7, 1), (2, 0), 1),
-                 (40, (7, 1), (2, 0), 1),
-                 (48, (7, 1), (2, 0), 1)]
-
         from data.load_radio_ml import get_radio_ml_loader as get_loader
 
     n_iters = 500
@@ -103,6 +91,7 @@ if __name__ == '__main__':
     loss = getattr(torch.nn, args.loss_type)
 
     burnin = 50
+    convs = load_network_spec(args.network_spec)
     net = ConvNetwork(args, im_dims, args.batch_size, convs, target_size,
                       act=torch.nn.Sigmoid(),
                       loss=loss, opt=opt, opt_param=opt_param, burnin=burnin)
