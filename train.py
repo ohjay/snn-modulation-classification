@@ -3,12 +3,14 @@ import pickle
 import numpy as np
 import os
 import argparse
+import datetime
+from tensorboardX import SummaryWriter
 
 from dcll.pytorch_libdcll import device
 from dcll.experiment_tools import mksavedir, save_source, annotate
 from dcll.pytorch_utils import grad_parameters, named_grad_parameters, NetworkDumper, tonumpy
-
 from networks import ConvNetwork, ReferenceConvNetwork, load_network_spec
+from data.utils import to_one_hot, image2spiketrain
 
 
 def parse_args():
@@ -19,22 +21,28 @@ def parse_args():
                         help='path to the folder containing the RadioML HDF5 file(s)')
     parser.add_argument('--network_spec', type=str, default='networks/radio_ml_conv.yaml',
                         metavar='S', help='path to YAML file describing net architecture')
+    parser.add_argument('--burnin', type=int, default=50,
+                        metavar='N', help='burnin')
     parser.add_argument('--batch_size', type=int, default=64,
                         metavar='N', help='input batch size for training')
     parser.add_argument('--batch_size_test', type=int, default=64,
                         metavar='N', help='input batch size for testing')
-    parser.add_argument('--n_epochs', type=int, default=10000,
-                        metavar='N', help='number of epochs to train')
+    parser.add_argument('--n_steps', type=int, default=10000,
+                        metavar='N', help='number of steps to train')
     parser.add_argument('--no_save', type=bool, default=False,
                         metavar='N', help='disables saving into Results directory')
     parser.add_argument('--seed', type=int, default=1,
                         metavar='S', help='random seed')
     parser.add_argument('--n_test_interval', type=int, default=20,
-                        metavar='N', help='how many epochs to run before testing')
+                        metavar='N', help='how many steps to run before testing')
     parser.add_argument('--n_test_samples', type=int, default=128,
                         metavar='N', help='how many test samples to use')
+    parser.add_argument('--n_iters', type=int, default=500, metavar='N',
+                        help='for how many ms do we present a sample during classification')
     parser.add_argument('--n_iters_test', type=int, default=1500, metavar='N',
                         help='for how many ms do we present a sample during classification')
+    parser.add_argument('--optim_type', type=str, default='Adamax',
+                        metavar='S', help='which optimizer to use')
     parser.add_argument('--loss_type', type=str, default='SmoothL1Loss',
                         metavar='S', help='which loss function to use')
     parser.add_argument('--lr', type=float, default=2.5e-8,
@@ -67,7 +75,6 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    import datetime
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
     log_dir = os.path.join('runs', args.data, current_time)
     print('log dir: {log_dir}'.format(log_dir=log_dir))
@@ -85,44 +92,41 @@ if __name__ == '__main__':
         from data.load_radio_ml import get_radio_ml_loader as get_loader
         get_loader_kwargs['data_dir'] = args.radio_ml_data_dir
 
-    n_iters = 500
+    n_iters = args.n_iters
     n_iters_test = args.n_iters_test
     # number of test samples: n_test * batch_size_test
     n_test = np.ceil(float(args.n_test_samples) /
                      args.batch_size_test).astype(int)
 
-    opt = torch.optim.Adamax
+    opt = getattr(torch.optim, args.optim_type)
     opt_param = {'lr': args.lr, 'betas': [.0, args.beta]}
     loss = getattr(torch.nn, args.loss_type)
 
-    burnin = 50
+    burnin = args.burnin
     convs = load_network_spec(args.network_spec)
     net = ConvNetwork(args, im_dims, args.batch_size, convs, target_size,
-                      act=torch.nn.Sigmoid(),
-                      loss=loss, opt=opt, opt_param=opt_param, burnin=burnin)
+                      act=torch.nn.Sigmoid(), loss=loss, opt=opt, opt_param=opt_param, burnin=burnin)
     net.reset(True)
 
     ref_net = ReferenceConvNetwork(args, im_dims, convs, loss, opt, opt_param, target_size)
 
-    from tensorboardX import SummaryWriter
     writer = SummaryWriter(log_dir=log_dir, comment='%s Conv' % args.data)
     dumper = NetworkDumper(writer, net)
 
     if not args.no_save:
         out_dir = os.path.join(args.output, args.data)
         d = mksavedir(pre=out_dir)
-        annotate(d, text=log_dir, filename='log_filename')
-        annotate(d, text=str(args), filename='args')
+        annotate(d, text=log_dir, filename='log_filename.txt')
+        annotate(d, text=str(args), filename='args.txt')
         with open(os.path.join(d, 'args.pkl'), 'wb') as fp:
             pickle.dump(vars(args), fp)
         save_source(d)
 
-    n_tests_total = np.ceil(float(args.n_epochs) /
+    n_tests_total = np.ceil(float(args.n_steps) /
                             args.n_test_interval).astype(int)
     acc_test = np.empty([n_tests_total, n_test, len(net.dcll_slices)])
     acc_test_ref = np.empty([n_tests_total, n_test])
 
-    from data.utils import to_one_hot, image2spiketrain
     train_data = get_loader(args.batch_size, train=True, taskid=0, **get_loader_kwargs)
     gen_train = iter(train_data)
     gen_test = iter(get_loader(args.batch_size_test, train=False, taskid=1, **get_loader_kwargs))
@@ -131,8 +135,8 @@ if __name__ == '__main__':
     all_test_data = [(samples, to_one_hot(labels, target_size))
                      for (samples, labels) in all_test_data]
 
-    for epoch in range(args.n_epochs):
-        if ((epoch + 1) % 1000) == 0:
+    for step in range(args.n_steps):
+        if ((step + 1) % 1000) == 0:
             net.dcll_slices[0].optimizer.param_groups[-1]['lr'] /= 2
             net.dcll_slices[1].optimizer.param_groups[-1]['lr'] /= 2
             net.dcll_slices[2].optimizer.param_groups[-1]['lr'] /= 2
@@ -145,7 +149,6 @@ if __name__ == '__main__':
         except StopIteration:
             gen_train = iter(train_data)
             input, labels = next(gen_train)
-
         labels = to_one_hot(labels, target_size)
 
         input_spikes, labels_spikes = image2spiketrain(input, labels,
@@ -160,8 +163,8 @@ if __name__ == '__main__':
         ref_input = torch.Tensor(input).to(device).reshape(-1, *im_dims)
         ref_label = torch.Tensor(labels).to(device)
 
-        net.reset()
         # Train
+        net.reset()
         net.train()
         ref_net.train()
         for sim_iteration in range(n_iters):
@@ -169,7 +172,9 @@ if __name__ == '__main__':
                       labels=labels_spikes[sim_iteration])
             ref_net.learn(x=ref_input, labels=ref_label)
 
-        if (epoch % args.n_test_interval) == 0:
+        # Test
+        if (step % args.n_test_interval) == 0:
+            test_idx = step // args.n_test_interval
             for i, test_data in enumerate(all_test_data):
                 test_input, test_labels = image2spiketrain(*test_data,
                                                            input_shape=im_dims,
@@ -185,38 +190,36 @@ if __name__ == '__main__':
                     raise
 
                 test_labels1h = torch.Tensor(test_labels).to(device)
-                test_ref_input = torch.Tensor(test_data[0]).to(
-                    device).reshape(-1, *im_dims)
+                test_ref_input = torch.Tensor(test_data[0]).to(device).reshape(-1, *im_dims)
                 test_ref_label = torch.Tensor(test_data[1]).to(device)
 
                 net.reset()
                 net.eval()
                 ref_net.eval()
-                # Test
                 for sim_iteration in range(n_iters_test):
                     net.test(x=test_input[sim_iteration])
 
                 ref_net.test(test_ref_input)
 
-                acc_test[epoch//args.n_test_interval,
-                         i, :] = net.accuracy(test_labels1h)
-                acc_test_ref[epoch//args.n_test_interval,
-                             i] = ref_net.accuracy(test_ref_label)
+                acc_test[test_idx, i, :] = net.accuracy(test_labels1h)
+                acc_test_ref[test_idx, i] = ref_net.accuracy(test_ref_label)
 
                 if i == 0:
-                    net.write_stats(writer, epoch, comment='_batch_'+str(i))
-                    ref_net.write_stats(writer, epoch)
+                    net.write_stats(writer, step, comment='_batch_'+str(i))
+                    ref_net.write_stats(writer, step)
+
             if not args.no_save:
-                np.save(d+'/acc_test.npy', acc_test)
-                np.save(d+'/acc_test_ref.npy', acc_test_ref)
-                annotate(d, text='', filename='best result')
+                np.save(d + '/acc_test.npy', acc_test)
+                np.save(d + '/acc_test_ref.npy', acc_test_ref)
                 parameter_dict = {
                     name: data.detach().cpu().numpy()
                     for (name, data) in net.named_parameters()
                 }
-                with open(d+'/parameters_{}.pkl'.format(epoch), 'wb') as f:
+                with open(d + '/parameters_{}.pkl'.format(step), 'wb') as f:
                     pickle.dump(parameter_dict, f)
-            print('Epoch {} \t Accuracy {} \t Ref {}'.format(epoch, np.mean(
-                acc_test[epoch//args.n_test_interval], axis=0), np.mean(acc_test_ref[epoch//args.n_test_interval], axis=0)))
+
+            acc = np.mean(acc_test[test_idx], axis=0)
+            acc_ref = np.mean(acc_test_ref[test_idx], axis=0)
+            print('Step {} \t Accuracy {} \t Ref {}'.format(step, acc, acc_ref))
 
     writer.close()
