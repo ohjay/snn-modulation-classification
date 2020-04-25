@@ -29,8 +29,8 @@ class RadioMLDataset(data.Dataset):
         # Add fake channel dim
         self.X = self.X[:, np.newaxis, ...]
 
-        # Set data type for one-hot labels
-        self.Y = self.Y.astype(np.float32)
+        # Convert one-hot labels back to argmax
+        self.Y = np.argmax(self.Y, axis=1)
 
         if normalize:
             minval = self.X.min()

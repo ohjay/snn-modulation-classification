@@ -9,6 +9,7 @@
 # Copyright : (c) UC Regents, Emre Neftci
 # Licence : Apache License, Version 2.0
 # -----------------------------------------------------------------------------
+
 import numpy as np
 
 
@@ -56,52 +57,36 @@ def save_source(directory):
     h.close()
 
 
-def mksavedir(pre='Results/', exp_dir=None):
+def mksavedir(pre='results/'):
     """
-    Creates a results directory in the subdirectory 'pre'. The directory name is given by ###__dd_mm_yy, where ### is the next unused 3 digit number
+    Creates a results directory in the subdirectory `pre`.
+    The directory name is given by ###__dd_mm_yy, where ### is the next unused 3 digit number.
     """
     import os
-    import tarfile
-    import glob
     import time
-    import os
     import fnmatch
-    import warnings
-    import pickle
-    if pre[-1] != '/':
-        pre + '/'
 
+    if not pre.endswith('/'):
+        pre += '/'
     if not os.path.exists(pre):
         os.makedirs(pre)
     prelist = np.sort(fnmatch.filter(os.listdir(pre), '[0-9][0-9][0-9]__*'))
 
-    if exp_dir == None:
-        if len(prelist) == 0:
-            expDirN = "001"
-        else:
-            expDirN = "%03d" % (
-                int((prelist[len(prelist) - 1].split("__"))[0]) + 1)
-
-        direct = time.strftime(
-            pre + expDirN + "__" + "%d-%m-%Y", time.localtime())
-        assert not os.path.exists(direct)
-
-    elif isinstance(exp_dir, str):
-        direct = pre + exp_dir
-        if os.path.exists(direct):
-            print(("Warning: overwriting directory {0}".format(direct)))
-            rmtree(direct)
-
+    if len(prelist) == 0:
+        expDirN = '001'
     else:
-        raise TypeError('exp_dir should be a string')
+        expDirN = '%03d' % (
+            int((prelist[len(prelist) - 1].split('__'))[0]) + 1)
 
-    os.mkdir(direct)
+    directory = os.path.join(pre, expDirN + '__' + '%d-%m-%Y')
+    directory = time.strftime(directory, time.localtime())
+    assert not os.path.exists(directory)
 
-    directory = direct + str('/')
+    os.mkdir(directory)
+    directory += '/'
 
-    fh = open(
-        directory + time.strftime("%H:%M:%S", time.localtime()), 'w')
+    fh = open(directory + time.strftime('%H:%M:%S', time.localtime()), 'w')
     fh.close()
 
-    print(("Created experiment directory {0}".format(directory)))
+    print(('Created experiment directory {0}'.format(directory)))
     return directory

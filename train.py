@@ -1,15 +1,3 @@
-#!/usr/bin/env python
-# -----------------------------------------------------------------------------
-# File Name : spikeConv2d.py
-# Author: Emre Neftci
-#
-# Creation Date : Mon 16 Jul 2018 09:56:30 PM MDT
-# Last Modified :
-#
-# Copyright : (c) UC Regents, Emre Neftci
-# Licence : Apache License, Version 2.0
-# -----------------------------------------------------------------------------
-
 import torch
 
 from dcll.pytorch_libdcll import Conv2dDCLLlayer, DenseDCLLlayer, device, DCLLClassification
@@ -24,10 +12,12 @@ import argparse
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='DCLL for MNIST')
-    parser.add_argument('--batch_size', type=int, default=128,
+    parser = argparse.ArgumentParser(description='DCLL')
+    parser.add_argument('--data', type=str, default='RadioML',
+                        choices=['MNIST', 'RadioML'], help='which data to use')
+    parser.add_argument('--batch_size', type=int, default=64,
                         metavar='N', help='input batch size for training')
-    parser.add_argument('--batch_size_test', type=int, default=512,
+    parser.add_argument('--batch_size_test', type=int, default=64,
                         metavar='N', help='input batch size for testing')
     parser.add_argument('--n_epochs', type=int, default=10000,
                         metavar='N', help='number of epochs to train')
@@ -37,10 +27,12 @@ def parse_args():
                         metavar='S', help='random seed')
     parser.add_argument('--n_test_interval', type=int, default=20,
                         metavar='N', help='how many epochs to run before testing')
-    parser.add_argument('--n_test_samples', type=int, default=1024,
+    parser.add_argument('--n_test_samples', type=int, default=128,
                         metavar='N', help='how many test samples to use')
     parser.add_argument('--n_iters_test', type=int, default=1500, metavar='N',
                         help='for how many ms do we present a sample during classification')
+    parser.add_argument('--loss_type', type=str, default='SmoothL1Loss',
+                        metavar='S', help='which loss function to use')
     parser.add_argument('--lr', type=float, default=2.5e-8,
                         metavar='N', help='learning rate for Adamax')
     parser.add_argument('--alpha', type=float, default=.92,
@@ -61,13 +53,13 @@ def parse_args():
                         metavar='N', help='scale network size')
     parser.add_argument('--comment', type=str, default='',
                         help='comment to name tensorboard files')
-    parser.add_argument('--output', type=str, default='Results_mnist/',
+    parser.add_argument('--output', type=str, default='results',
                         help='folder name for the results')
     return parser.parse_args()
 
 
 class ReferenceConvNetwork(torch.nn.Module):
-    def __init__(self, im_dims, convs, loss, opt, opt_param):
+    def __init__(self, im_dims, convs, loss, opt, opt_param, out_dim):
         super(ReferenceConvNetwork, self).__init__()
 
         def make_conv(inp, conf):
@@ -97,7 +89,7 @@ class ReferenceConvNetwork(torch.nn.Module):
             return x.shape[1:]
 
         # Should we train linear decoders? They are not in DCLL
-        self.linear = torch.nn.Linear(np.prod(latent_size()), 10).to(device)
+        self.linear = torch.nn.Linear(np.prod(latent_size()), out_dim).to(device)
         self.linear.weight.requires_grad = True
         self.linear.bias.requires_grad = True
 
@@ -191,7 +183,7 @@ class ConvNetwork(torch.nn.Module):
         [s.init(self.batch_size, init_states=init_states)
          for s in self.dcll_slices]
 
-    def write_stats(self, writer, epoch, comment=""):
+    def write_stats(self, writer, epoch, comment=''):
         [s.write_stats(writer, label='test'+comment+'/', epoch=epoch)
          for s in self.dcll_slices]
 
@@ -205,47 +197,58 @@ if __name__ == '__main__':
     np.random.seed(args.seed)
 
     import datetime
-    import socket
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
-    log_dir = os.path.join('runs/', 'pytorch_conv3L_mnist_',
-                           current_time + '_' + socket.gethostname() + '_' + args.comment, )
-    print(log_dir)
+    log_dir = os.path.join('runs', args.data, current_time)
+    print('log dir: {log_dir}'.format(log_dir=log_dir))
+
+    if args.data == 'MNIST':
+        im_dims = (1, 28, 28)
+        target_size = 10
+
+        # format: (out_channels, kernel_size, padding, pooling)
+        convs = [(16, 7, 2, 2),
+                 (24, 7, 2, 1),
+                 (32, 7, 2, 2)]
+
+        from data.load_mnist import get_mnist_loader as get_loader
+
+    elif args.data == 'RadioML':
+        im_dims = (1, 1024, 2)
+        target_size = 24
+
+        # format: (out_channels, kernel_size, padding, pooling)
+        convs = [(16, (7, 1), (2, 0), 1),
+                 (24, (7, 1), (2, 0), 1),
+                 (32, (7, 1), (2, 0), 1)]
+
+        from data.load_radio_ml import get_radio_ml_loader as get_loader
 
     n_iters = 500
     n_iters_test = args.n_iters_test
-    im_dims = (1, 28, 28)
-    target_size = 10
     # number of test samples: n_test * batch_size_test
     n_test = np.ceil(float(args.n_test_samples) /
                      args.batch_size_test).astype(int)
 
     opt = torch.optim.Adamax
     opt_param = {'lr': args.lr, 'betas': [.0, args.beta]}
-
-    # loss = torch.nn.CrossEntropyLoss
-    loss = torch.nn.SmoothL1Loss
+    loss = getattr(torch.nn, args.loss_type)
 
     burnin = 50
-    # format: (out_channels, kernel_size, padding, pooling)
-    convs = [(16, 7, 2, 2),
-             (24, 7, 2, 1),
-             (32, 7, 2, 2)]
-    # convs = [ (16, 7, 3, 2), (24, 7, 3, 2), (32, 7, 3, 1), (64, 3, 3, 1) ]
-
     net = ConvNetwork(args, im_dims, args.batch_size, convs, target_size,
                       act=torch.nn.Sigmoid(),
                       loss=loss, opt=opt, opt_param=opt_param, burnin=burnin
                       )
     net.reset(True)
 
-    ref_net = ReferenceConvNetwork(im_dims, convs, loss, opt, opt_param)
+    ref_net = ReferenceConvNetwork(im_dims, convs, loss, opt, opt_param, target_size)
 
     from tensorboardX import SummaryWriter
-    writer = SummaryWriter(log_dir=log_dir, comment='MNIST Conv')
+    writer = SummaryWriter(log_dir=log_dir, comment='%s Conv' % args.data)
     dumper = NetworkDumper(writer, net)
 
     if not args.no_save:
-        d = mksavedir(pre=args.output)
+        out_dir = os.path.join(args.output, args.data)
+        d = mksavedir(pre=out_dir)
         annotate(d, text=log_dir, filename='log_filename')
         annotate(d, text=str(args), filename='args')
         with open(os.path.join(d, 'args.pkl'), 'wb') as fp:
@@ -257,12 +260,10 @@ if __name__ == '__main__':
     acc_test = np.empty([n_tests_total, n_test, len(net.dcll_slices)])
     acc_test_ref = np.empty([n_tests_total, n_test])
 
-    from data.load_mnist import get_mnist_loader
     from data.utils import to_one_hot, image2spiketrain
-    train_data = get_mnist_loader(args.batch_size, train=True, taskid=0)
+    train_data = get_loader(args.batch_size, train=True, taskid=0)
     gen_train = iter(train_data)
-    gen_test = iter(get_mnist_loader(
-        args.batch_size_test, train=False, taskid=1))
+    gen_test = iter(get_loader(args.batch_size_test, train=False, taskid=1))
 
     all_test_data = [next(gen_test) for i in range(n_test)]
     all_test_data = [(samples, to_one_hot(labels, target_size))
@@ -275,7 +276,7 @@ if __name__ == '__main__':
             net.dcll_slices[2].optimizer.param_groups[-1]['lr'] /= 2
             net.dcll_slices[2].optimizer2.param_groups[-1]['lr'] /= 2
             ref_net.optim.param_groups[-1]['lr'] /= 2
-            print("Adjusting learning rates")
+            print('Adjusting learning rates')
 
         try:
             input, labels = next(gen_train)
@@ -317,8 +318,8 @@ if __name__ == '__main__':
                 try:
                     test_input = torch.Tensor(test_input).to(device)
                 except RuntimeError as e:
-                    print("Exception: " + str(e) +
-                          ". Try to decrease your batch_size_test with the --batch_size_test argument.")
+                    print('Exception: ' + str(e) +
+                          '. Try to decrease your batch_size_test with the --batch_size_test argument.')
                     raise
 
                 test_labels1h = torch.Tensor(test_labels).to(device)
@@ -346,14 +347,14 @@ if __name__ == '__main__':
             if not args.no_save:
                 np.save(d+'/acc_test.npy', acc_test)
                 np.save(d+'/acc_test_ref.npy', acc_test_ref)
-                annotate(d, text="", filename="best result")
+                annotate(d, text='', filename='best result')
                 parameter_dict = {
                     name: data.detach().cpu().numpy()
                     for (name, data) in net.named_parameters()
                 }
                 with open(d+'/parameters_{}.pkl'.format(epoch), 'wb') as f:
                     pickle.dump(parameter_dict, f)
-            print("Epoch {} \t Accuracy {} \t Ref {}".format(epoch, np.mean(
+            print('Epoch {} \t Accuracy {} \t Ref {}'.format(epoch, np.mean(
                 acc_test[epoch//args.n_test_interval], axis=0), np.mean(acc_test_ref[epoch//args.n_test_interval], axis=0)))
 
     writer.close()

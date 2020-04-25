@@ -9,6 +9,7 @@
 # Copyright : (c) UC Regents, Emre Neftci
 # Licence : Apache License, Version 2.0
 # -----------------------------------------------------------------------------
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -30,7 +31,7 @@ device = 'cuda'
 
 
 def adjust_learning_rate(optimizer, epoch, base_lr=5e-5):
-    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
+    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs."""
     lr = base_lr * (0.1 ** (epoch / n_epochs))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
@@ -435,10 +436,10 @@ class ContinuousRelativeRefractoryConv2D(ContinuousConv2D):
                  act=nn.Sigmoid(),
                  random_tau=False,
                  **kwargs):
-        '''
+        """
         Continuous local learning with relative refractory period. No isyn or vmem dynamics for speed and memory.
         *wrp*: weight for the relative refractory period
-        '''
+        """
         super(ContinuousRelativeRefractoryConv2D, self).__init__(in_channels, out_channels,
                                                                  kernel_size, stride, padding, dilation, groups, bias, alpha, alphas, act)
 
@@ -602,25 +603,16 @@ class Conv2dDCLLlayer(nn.Module):
         return self
 
 
-# class Conv2dDCLLlayerDiscrete(Conv2dDCLLlayer):
-#    def forward(self, input):
-#        output, pv, pvmem = self.i2h(input)
-#        output, pv = self.pool(output), self.pool(pv)
-#        flatten = pv.view(pv.shape[0], -1)
-#        pvoutput = self.dropout(soft_threshold(self.i2o(flatten)))
-#        #output = output.detach()
-#        return output, pvoutput, pv, self.pool(pvmem)
-
 class DCLLBase(nn.Module):
     def __init__(self, dclllayer, name='DCLLbase', batch_size=48, loss=torch.nn.MSELoss, optimizer=optim.SGD, kwargs_optimizer={'lr': 5e-5}, burnin=200, collect_stats=False):
-        '''
+        """
         *dclllayer*: layer that supports local learning
         *batch_size*: Used for initialization
         *loss*: torch loss class
         *optimizer* : torch optimizer class
         *kwargs_optimizer*: options to be passed to optimizer
         *collect_stats*: boolean whether statistics (weight bias histograms) under write_stats should be collected during learning)
-        '''
+        """
         super(DCLLBase, self).__init__()
         self.dclllayer = dclllayer
         self.crit = loss().to(device)
@@ -654,10 +646,10 @@ class DCLLBase(nn.Module):
         return o, p, pv, pvmem
 
     def write_stats(self, writer, label, epoch):
-        '''
+        """
         *writer*: a tensorboard writer
         *label*: label, to append the tensorboard entry
-        '''
+        """
         writer.add_histogram(self.name+'/weight',
                              self.dclllayer.i2h.weight.flatten(),
                              epoch)
@@ -771,9 +763,3 @@ def load_dcllslices(directory, slices):
     for i, s in enumerate(slices):
         s.load_state_dict(torch.load(
             directory+'/slice_state{0}.pkl'.format(i)))
-
-
-if __name__ == '__main__':
-    # Test dense gradient
-    #    f = CLLDenseFunction.apply
-    pass

@@ -5,5 +5,5 @@ Training (quantized) spiking neural networks with Deep Continuous Local Learning
 ### Usage
 ```
 pip install -r requirements.txt
-python samples/radio_ml.py
+./scripts/train_radio_ml.sh
 ```

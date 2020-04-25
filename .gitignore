@@ -31,6 +31,7 @@ var/
 .installed.cfg
 *.egg
 Results*
+results*
 runs*
 samples/data*
 __gen__*
