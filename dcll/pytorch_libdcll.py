@@ -530,14 +530,13 @@ class Conv2dDCLLlayer(nn.Module):
         if pooling is not None:
             if not hasattr(pooling, '__len__'):
                 pooling = (pooling, pooling)
-            pool_pad = (pooling[0]-1)//2
-            self.pooling = pooling[1]
-            pool_pad = (pooling[1]-1)//2
-            self.pooling = pooling[0]
+            pool_pad = ((pooling[0] - 1) // 2,
+                        (pooling[1] - 1) // 2)
+            self.pooling = pooling
             self.pool = nn.MaxPool2d(
-                kernel_size=pooling[0], stride=pooling[1], padding=pool_pad)
+                kernel_size=pooling, stride=pooling, padding=pool_pad)
         else:
-            self.pooling = 1
+            self.pooling = (1, 1)
             self.pool = lambda x: x
         self.kernel_size = kernel_size
         self.target_size = target_size
@@ -581,8 +580,8 @@ class Conv2dDCLLlayer(nn.Module):
 
     def get_output_shape(self):
         conv_shape = self.i2h.get_output_shape(self.im_dims)
-        height = conv_shape[0]//self.pooling
-        weight = conv_shape[1]//self.pooling
+        height = conv_shape[0] // self.pooling[0]
+        weight = conv_shape[1] // self.pooling[1]
         return height, weight
 
     def forward(self, input):

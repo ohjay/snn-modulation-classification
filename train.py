@@ -76,7 +76,7 @@ if __name__ == '__main__':
         from data.load_mnist import get_mnist_loader as get_loader
 
     elif args.data == 'RadioML':
-        im_dims = (1, 1024, 2)
+        im_dims = (2, 1, 1024)
         target_size = 24
         from data.load_radio_ml import get_radio_ml_loader as get_loader
 

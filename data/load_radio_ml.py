@@ -54,8 +54,8 @@ class RadioMLDataset(data.Dataset):
         self.X = np.concatenate(self.X, axis=0)
         self.Y = np.concatenate(self.Y, axis=0)
 
-        # Add fake channel dim
-        self.X = self.X[:, np.newaxis, ...]
+        # Add fake height dim (TODO remove if switching to 1D convolutions)
+        self.X = self.X.transpose(0, 2, 1)[:, :, np.newaxis, :]
 
         if normalize:
             minval = self.X.min()

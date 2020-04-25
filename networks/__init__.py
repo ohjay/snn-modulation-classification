@@ -27,6 +27,14 @@ class ReferenceConvNetwork(torch.nn.Module):
             padding      = conf['padding']
             pooling      = conf['pooling']
 
+            pool_pad = None
+            if type(pooling) == int:
+                pool_pad = (pooling - 1) // 2
+            elif type(pooling) == tuple:
+                pool_pad = tuple((np.array(pooling) - 1) // 2)
+            else:
+                raise ValueError('unsupported pooling spec type: %r' % type(pooling))
+
             layer = torch.nn.Sequential(
                 torch.nn.Conv2d(in_channels=inp[0],
                                 out_channels=int(out_channels * args.netscale),
@@ -34,7 +42,7 @@ class ReferenceConvNetwork(torch.nn.Module):
                                 padding=padding),
                 torch.nn.ReLU(),
                 torch.nn.MaxPool2d(
-                    kernel_size=pooling, stride=pooling, padding=(pooling-1)//2)
+                    kernel_size=pooling, stride=pooling, padding=pool_pad)
             )
             layer = layer.to(device)
             return (layer, [out_channels])
