@@ -152,22 +152,22 @@ class ConvNetwork(torch.nn.Module):
 
     def learn(self, x, labels):
         spikes = x
-        for sl in self.dcll_slices:
-            spikes, _, _, _, _ = sl.train_dcll(
+        for s in self.dcll_slices:
+            spikes, _, _, _, _ = s.train_dcll(
                 spikes, labels, regularize=False)
 
     def test(self, x):
         spikes = x
-        for sl in self.dcll_slices:
-            spikes, _, _, _ = sl.forward(spikes)
+        for s in self.dcll_slices:
+            spikes, _, _, _ = s.forward(spikes)
 
     def reset(self, init_states=False):
-        [s.init(self.batch_size, init_states=init_states)
-         for s in self.dcll_slices]
+        for s in self.dcll_slices:
+            s.init(self.batch_size, init_states=init_states)
 
     def write_stats(self, writer, epoch, comment=''):
-        [s.write_stats(writer, label='test'+comment+'/', epoch=epoch)
-         for s in self.dcll_slices]
+        for s in self.dcll_slices:
+            s.write_stats(writer, label='test'+comment, epoch=epoch)
 
     def accuracy(self, labels):
         return [s.accuracy(labels) for s in self.dcll_slices]

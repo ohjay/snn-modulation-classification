@@ -649,26 +649,26 @@ class DCLLBase(nn.Module):
         *writer*: a tensorboard writer
         *label*: label, to append the tensorboard entry
         """
-        writer.add_histogram(self.name+'/weight',
+        writer.add_histogram(self.name + '/weight',
                              self.dclllayer.i2h.weight.flatten(),
                              epoch)
-        writer.add_histogram(self.name+'/bias',
+        writer.add_histogram(self.name + '/bias',
                              self.dclllayer.i2h.bias.flatten(),
                              epoch)
         if self.collect_stats:
             pd = np.mean(self.activity_hist, axis=0)
             pd = pd / pd.sum()
 
-            name = self.name+'/'+'/low_pv/'+label
+            name = self.name + '/low_pv/' + label
 
             writer.add_scalar(name, (pd[0]), epoch)
 
-            name = self.name+'/'+'/high_pv/'+label
+            name = self.name + '/high_pv/' + label
 
             writer.add_scalar(name, (pd[-1]), epoch)
 
             print(self.name +
-                  " low:{0:1.3} high:{1:1.3}".format(pd[0], pd[-1]))
+                  ' low:{0:1.3} high:{1:1.3}'.format(pd[0], pd[-1]))
 
     def train_dcll(self, input, target, do_train=True, regularize=0.05):
         output, pvoutput, pv, pvmem = self.forward(input)
@@ -707,7 +707,7 @@ class DCLLClassification(DCLLBase):
 
     def write_stats(self, writer, label, epoch):
         super(DCLLClassification, self).write_stats(writer, label, epoch)
-        writer.add_scalar(self.name+'/acc/'+label, self.acc, epoch)
+        writer.add_scalar(self.name + '/acc/' + label, self.acc, epoch)
 
     def accuracy(self, targets):
         cl = np.array(self.clout)
@@ -725,7 +725,7 @@ class DCLLRegression(DCLLBase):
 
     def write_stats(self, writer, label, epoch):
         super(DCLLRegression, self).write_stats(writer, label, epoch)
-        writer.add_scalar(self.name+'/acc/'+label, self.acc, epoch)
+        writer.add_scalar(self.name + '/acc/' + label, self.acc, epoch)
 
     def accuracy(self, targets):
         cl = torch.stack(self.clout, dim=0)
@@ -755,7 +755,7 @@ class DCLLGeneration(DCLLBase):
 
 def save_dcllslices(directory, slices):
     for i, s in enumerate(slices):
-        torch.save(s.state_dict(), directory+'/slice_state{0}.pkl'.format(i))
+        torch.save(s.state_dict(), directory + '/slice_state{0}.pkl'.format(i))
 
 
 def load_dcllslices(directory, slices):
