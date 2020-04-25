@@ -15,6 +15,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description='DCLL')
     parser.add_argument('--data', type=str, default='RadioML',
                         choices=['MNIST', 'RadioML'], help='which data to use')
+    parser.add_argument('--radio_ml_data_dir', type=str, default='2018.01',
+                        help='path to the folder containing the RadioML HDF5 file(s)')
     parser.add_argument('--network_spec', type=str, default='networks/radio_ml_conv.yaml',
                         metavar='S', help='path to YAML file describing net architecture')
     parser.add_argument('--batch_size', type=int, default=64,
@@ -70,6 +72,8 @@ if __name__ == '__main__':
     log_dir = os.path.join('runs', args.data, current_time)
     print('log dir: {log_dir}'.format(log_dir=log_dir))
 
+    get_loader_kwargs = {}
+
     if args.data == 'MNIST':
         im_dims = (1, 28, 28)
         target_size = 10
@@ -79,6 +83,7 @@ if __name__ == '__main__':
         im_dims = (2, 1, 1024)
         target_size = 24
         from data.load_radio_ml import get_radio_ml_loader as get_loader
+        get_loader_kwargs['data_dir'] = args.radio_ml_data_dir
 
     n_iters = 500
     n_iters_test = args.n_iters_test
@@ -118,9 +123,9 @@ if __name__ == '__main__':
     acc_test_ref = np.empty([n_tests_total, n_test])
 
     from data.utils import to_one_hot, image2spiketrain
-    train_data = get_loader(args.batch_size, train=True, taskid=0)
+    train_data = get_loader(args.batch_size, train=True, taskid=0, **get_loader_kwargs)
     gen_train = iter(train_data)
-    gen_test = iter(get_loader(args.batch_size_test, train=False, taskid=1))
+    gen_test = iter(get_loader(args.batch_size_test, train=False, taskid=1, **get_loader_kwargs))
 
     all_test_data = [next(gen_test) for i in range(n_test)]
     all_test_data = [(samples, to_one_hot(labels, target_size))
