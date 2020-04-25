@@ -13,34 +13,11 @@
 import numpy as np
 
 
-def accuracy(model, x_test, y_test):
-    t = model.predict(x_test)
-    return 1-(t.argmax(axis=1) == y_test.argmax(axis=1)).mean()
-
-
 def annotate(d, text='', filename='notes.txt'):
     "Create a file in the Results directory, with contents text"
     f = open(d + '/' + filename, 'w')
     f.write(text)
     f.close()
-
-
-def save(directory, obj=None, filename='default.pkl'):
-    import pickle
-    if obj == None and filename == None:
-        f = open(directory + 'data.pickle', 'wb')
-        pickle.dump(globaldata, f)
-        f.close()
-        save_source()
-    elif obj == None and filename != None:
-        f = open(directory + filename, 'wb')
-        pickle.dump(globaldata, f)
-        f.close()
-    else:
-        f = open(directory + filename, 'wb')
-        pickle.dump(obj, f)
-        f.close()
-    return None
 
 
 def save_source(directory):

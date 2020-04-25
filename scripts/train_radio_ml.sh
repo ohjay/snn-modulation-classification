@@ -2,9 +2,9 @@
 
 data="RadioML"
 
-batch_size=64
-batch_size_test=64
-n_test_samples=512
+batch_size=96
+batch_size_test=96
+n_test_samples=480
 
 python train.py \
     --data $data \
