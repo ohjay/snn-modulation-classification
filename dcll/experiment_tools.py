@@ -10,20 +10,19 @@
 # Licence : Apache License, Version 2.0
 # -----------------------------------------------------------------------------
 
+import os
 import numpy as np
 
 
 def annotate(d, text='', filename='notes.txt'):
-    "Create a file in the Results directory, with contents text"
-    f = open(d + '/' + filename, 'w')
+    """Create a file FILENAME in the directory D with contents TEXT."""
+    f = open(os.path.join(d, filename), 'w')
     f.write(text)
     f.close()
 
 
 def save_source(directory):
-    """
-    Save all the python scripts from the current directory into the results directory
-    """
+    """Save all the Python scripts from the current directory into the results directory."""
     import tarfile
     import glob
     h = tarfile.open(directory + '/exp_scripts.tar.bz2', 'w:bz2')
@@ -37,9 +36,8 @@ def save_source(directory):
 def mksavedir(pre='results/'):
     """
     Creates a results directory in the subdirectory `pre`.
-    The directory name is given by ###__dd_mm_yy, where ### is the next unused 3 digit number.
+    The directory name is given by ###__dd_mm_yy, where ### is the next unused 3-digit number.
     """
-    import os
     import time
     import fnmatch
 

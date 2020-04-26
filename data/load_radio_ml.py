@@ -40,6 +40,7 @@ class RadioMLDataset(data.Dataset):
 
             # Convert one-hot labels back to argmax
             Y = np.argmax(full_h5f['Y'], axis=1)
+
             for class_idx in range(24):
                 class_X = full_h5f['X'][Y == class_idx, :, :]
                 class_Z = full_h5f['Z'][Y == class_idx, 0]

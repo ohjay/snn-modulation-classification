@@ -106,9 +106,11 @@ if __name__ == '__main__':
     convs = load_network_spec(args.network_spec)
     net = ConvNetwork(args, im_dims, args.batch_size, convs, target_size,
                       act=torch.nn.Sigmoid(), loss=loss, opt=opt, opt_param=opt_param, burnin=burnin)
+    net = net.to(device)
     net.reset(True)
 
     ref_net = ReferenceConvNetwork(args, im_dims, convs, loss, opt, opt_param, target_size)
+    ref_net = ref_net.to(device)
 
     writer = SummaryWriter(log_dir=log_dir, comment='%s Conv' % args.data)
     dumper = NetworkDumper(writer, net)
