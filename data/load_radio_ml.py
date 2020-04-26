@@ -75,20 +75,21 @@ class RadioMLDataset(data.Dataset):
         self.X = np.zeros((total_size, 1024, 2), dtype=np.float32)
         self.Y = np.zeros(total_size, dtype=np.int64)
         for class_idx in range(24):
-            for snr in range(min_snr, 32, 2):
+            for snr_idx, snr in enumerate(range(min_snr, 32, 2)):
                 class_snr_name = 'class%d_snr%d.hdf5' % (class_idx, snr)
                 h5f_path = os.path.join(data_dir, class_snr_name)
                 h5f = h5py.File(h5f_path, 'r')
-                X = h5f['X'][:per_h5_size]
+                X = h5f['X'][:]
                 X_minval = min(X_minval, X.min())
                 X_maxval = max(X_maxval, X.max())
                 if train:
                     X_split = X[:train_split_size]
                 else:
-                    X_split = X[train_split_size:]
+                    X_split = X[train_split_size:per_h5_size]
                 # Interleave
-                self.X[class_idx*snr_count::24*snr_count] = X_split
-                self.Y[class_idx*snr_count::24*snr_count] = class_idx
+                start_idx = (class_idx * snr_count) + snr_idx
+                self.X[start_idx::24*snr_count] = X_split
+                self.Y[start_idx::24*snr_count] = class_idx
                 h5f.close()
                 X = None
                 X_split = None
