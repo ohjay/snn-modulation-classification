@@ -21,6 +21,8 @@ def parse_args():
                         help='path to the folder containing the RadioML HDF5 file(s)')
     parser.add_argument('--network_spec', type=str, default='networks/radio_ml_conv.yaml',
                         metavar='S', help='path to YAML file describing net architecture')
+    parser.add_argument('--restore_path', type=str,
+                        metavar='S', help='path to .pth file from which to restore')
     parser.add_argument('--burnin', type=int, default=50,
                         metavar='N', help='burnin')
     parser.add_argument('--batch_size', type=int, default=64,
@@ -106,6 +108,18 @@ if __name__ == '__main__':
     convs = load_network_spec(args.network_spec)
     net = ConvNetwork(args, im_dims, args.batch_size, convs, target_size,
                       act=torch.nn.Sigmoid(), loss=loss, opt=opt, opt_param=opt_param, burnin=burnin)
+
+    if args.restore_path:
+        print('-' * 80)
+        if not os.path.isfile(args.restore_path):
+            print('ERROR: Cannot load `%s`.' % args.restore_path)
+            print('File does not exist! Aborting load...')
+        else:
+            state_dict = torch.load(args.restore_path)
+            net.load_state_dict(state_dict)
+            print('Loaded the SNN model from `%s`.' % args.restore_path)
+        print('-' * 80)
+
     net = net.to(device)
     net.reset(True)
 
@@ -213,12 +227,14 @@ if __name__ == '__main__':
             if not args.no_save:
                 np.save(d + '/acc_test.npy', acc_test)
                 np.save(d + '/acc_test_ref.npy', acc_test_ref)
-                parameter_dict = {
-                    name: data.detach().cpu().numpy()
-                    for (name, data) in net.named_parameters()
-                }
-                with open(d + '/parameters_{}.pkl'.format(step), 'wb') as f:
-                    pickle.dump(parameter_dict, f)
+
+                # Save network parameters
+                save_path = os.path.join(d, 'parameters_{}.pth'.format(step))
+                torch.save(net.cpu().state_dict(), save_path)
+                net = net.to(device)
+                print('-' * 80)
+                print('Saved network parameters to `%s`.' % save_path)
+                print('-' * 80)
 
             acc = np.mean(acc_test[test_idx], axis=0)
             acc_ref = np.mean(acc_test_ref[test_idx], axis=0)
