@@ -110,7 +110,7 @@ class RadioMLDataset(data.Dataset):
 
 def get_radio_ml_loader(batch_size, train, taskid=0, **kwargs):
     data_dir = kwargs['data_dir']
-    dataset = RadioMLDataset(data_dir, train, normalize=True)
+    dataset = RadioMLDataset(data_dir, train, normalize=False)
     print('dataset size: %d' % len(dataset))
 
     loader = DataLoader(dataset=dataset,
