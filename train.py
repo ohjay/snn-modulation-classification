@@ -23,6 +23,14 @@ def parse_args():
                         metavar='S', help='path to YAML file describing net architecture')
     parser.add_argument('--ref_network_spec', type=str, default='networks/radio_ml_conv_ref.yaml',
                         metavar='S', help='path to YAML file describing reference net architecture')
+    parser.add_argument('--I_resolution', type=int, default=128,
+                        metavar='N', help='size of I dimension (used when representing I/Q plane as image)')
+    parser.add_argument('--Q_resolution', type=int, default=128,
+                        metavar='N', help='size of Q dimension (used when representing I/Q plane as image)')
+    parser.add_argument('--I_bounds', type=float, default=(-1, 1),
+                        nargs=2, help='range of values to represent in I dimension of I/Q image')
+    parser.add_argument('--Q_bounds', type=float, default=(-1, 1),
+                        nargs=2, help='range of values to represent in Q dimension of I/Q image')
     parser.add_argument('--restore_path', type=str,
                         metavar='S', help='path to .pth file from which to restore')
     parser.add_argument('--burnin', type=int, default=50,
@@ -105,7 +113,7 @@ if __name__ == '__main__':
         to_st_test_kwargs['max_duration'] = n_iters_test
 
     elif args.data == 'RadioML':
-        im_dims = (1, 28, 28)
+        im_dims = (1, args.Q_resolution, args.I_resolution)
         ref_im_dims = (2, 1, 1024)
         target_size = 24
         from data.load_radio_ml import get_radio_ml_loader as get_loader
@@ -116,12 +124,12 @@ if __name__ == '__main__':
         n_iters = 1024
         n_iters_test = 1024
         for to_st_kwargs in (to_st_train_kwargs, to_st_test_kwargs):
-            to_st_kwargs['out_w'] = 28
-            to_st_kwargs['out_h'] = 28
-            to_st_kwargs['min_I'] = -1
-            to_st_kwargs['max_I'] = 1
-            to_st_kwargs['min_Q'] = -1
-            to_st_kwargs['max_Q'] = 1
+            to_st_kwargs['out_w'] = args.I_resolution
+            to_st_kwargs['out_h'] = args.Q_resolution
+            to_st_kwargs['min_I'] = args.I_bounds[0]
+            to_st_kwargs['max_I'] = args.I_bounds[1]
+            to_st_kwargs['min_Q'] = args.Q_bounds[0]
+            to_st_kwargs['max_Q'] = args.Q_bounds[1]
             to_st_kwargs['max_duration'] = 1024
 
     # number of test samples: n_test * batch_size_test

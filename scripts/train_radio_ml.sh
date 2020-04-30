@@ -1,17 +1,28 @@
 #!/bin/bash
 
 data="RadioML"
+radio_ml_data_dir="/media/owen/ba9d40b5-89de-4832-bad4-156b118e4a66/2018.01"
+I_resolution=128
+Q_resolution=128
+min_I=-1.0
+max_I=1.0
+min_Q=-1.0
+max_Q=1.0
+
 network_spec="networks/radio_ml_conv.yaml"
 ref_network_spec="networks/radio_ml_conv_ref.yaml"
-radio_ml_data_dir="/media/owen/ba9d40b5-89de-4832-bad4-156b118e4a66/2018.01"
 
-batch_size=256
-batch_size_test=256
+batch_size=32
+batch_size_test=32
 n_test_samples=512
 
 python train.py \
     --data $data \
     --radio_ml_data_dir $radio_ml_data_dir \
+    --I_resolution $I_resolution \
+    --Q_resolution $Q_resolution \
+    --I_bounds $min_I $max_I \
+    --Q_bounds $min_Q $max_Q \
     --network_spec $network_spec \
     --ref_network_spec $ref_network_spec \
     --batch_size $batch_size \
