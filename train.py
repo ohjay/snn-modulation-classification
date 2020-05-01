@@ -130,7 +130,7 @@ if __name__ == '__main__':
             to_st_kwargs['max_I'] = args.I_bounds[1]
             to_st_kwargs['min_Q'] = args.Q_bounds[0]
             to_st_kwargs['max_Q'] = args.Q_bounds[1]
-            to_st_kwargs['max_duration'] = 1024
+            to_st_kwargs['max_duration'] = n_iters
 
     # number of test samples: n_test * batch_size_test
     n_test = np.ceil(float(args.n_test_samples) /
@@ -190,10 +190,9 @@ if __name__ == '__main__':
 
     for step in range(args.n_steps):
         if ((step + 1) % 1000) == 0:
-            net.dcll_slices[0].optimizer.param_groups[-1]['lr'] /= 2
-            net.dcll_slices[1].optimizer.param_groups[-1]['lr'] /= 2
-            net.dcll_slices[2].optimizer.param_groups[-1]['lr'] /= 2
-            net.dcll_slices[2].optimizer2.param_groups[-1]['lr'] /= 2
+            for i in range(len(net.dcll_slices)):
+                net.dcll_slices[i].optimizer.param_groups[-1]['lr'] /= 2
+            net.dcll_slices[-1].optimizer2.param_groups[-1]['lr'] /= 2
             ref_net.optim.param_groups[-1]['lr'] /= 2
             print('Adjusting learning rates')
 
