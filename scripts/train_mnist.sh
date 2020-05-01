@@ -9,7 +9,7 @@ batch_size_test=512
 n_test_samples=1024
 
 # -u to immediately print to stdout (for file redirect to see output before script ends)
-python train.py -u \
+python -u train.py \
     --data $data \
     --network_spec $network_spec \
     --ref_network_spec $ref_network_spec \
