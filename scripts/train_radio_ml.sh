@@ -8,7 +8,8 @@ batch_size=96
 batch_size_test=96
 n_test_samples=480
 
-python train.py \
+# -u to immediately print to stdout (for file redirect to see output before script ends)
+python -u train.py \
     --data $data \
     --radio_ml_data_dir $radio_ml_data_dir \
     --network_spec $network_spec \
