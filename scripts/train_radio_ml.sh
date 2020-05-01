@@ -1,18 +1,33 @@
 #!/bin/bash
 
 data="RadioML"
-network_spec="networks/radio_ml_conv.yaml"
+
 radio_ml_data_dir="/lif/radioml/2018.01/"
 
-batch_size=96
-batch_size_test=96
-n_test_samples=480
+I_resolution=128
+Q_resolution=128
+min_I=-1.0
+max_I=1.0
+min_Q=-1.0
+max_Q=1.0
+
+network_spec="networks/radio_ml_conv.yaml"
+ref_network_spec="networks/radio_ml_conv_ref.yaml"
+
+batch_size=32
+batch_size_test=32
+n_test_samples=512
 
 # -u to immediately print to stdout (for file redirect to see output before script ends)
 python -u train.py \
     --data $data \
     --radio_ml_data_dir $radio_ml_data_dir \
+    --I_resolution $I_resolution \
+    --Q_resolution $Q_resolution \
+    --I_bounds $min_I $max_I \
+    --Q_bounds $min_Q $max_Q \
     --network_spec $network_spec \
+    --ref_network_spec $ref_network_spec \
     --batch_size $batch_size \
     --batch_size_test $batch_size_test \
     --n_test_samples $n_test_samples

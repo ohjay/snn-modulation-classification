@@ -10,7 +10,7 @@ from dcll.pytorch_libdcll import device
 from dcll.experiment_tools import mksavedir, save_source, annotate
 from dcll.pytorch_utils import grad_parameters, named_grad_parameters, NetworkDumper, tonumpy
 from networks import ConvNetwork, ReferenceConvNetwork, load_network_spec
-from data.utils import to_one_hot, image2spiketrain
+from data.utils import to_one_hot
 
 
 def parse_args():
@@ -21,6 +21,18 @@ def parse_args():
                         help='path to the folder containing the RadioML HDF5 file(s)')
     parser.add_argument('--network_spec', type=str, default='networks/radio_ml_conv.yaml',
                         metavar='S', help='path to YAML file describing net architecture')
+    parser.add_argument('--ref_network_spec', type=str, default='networks/radio_ml_conv_ref.yaml',
+                        metavar='S', help='path to YAML file describing reference net architecture')
+    parser.add_argument('--I_resolution', type=int, default=128,
+                        metavar='N', help='size of I dimension (used when representing I/Q plane as image)')
+    parser.add_argument('--Q_resolution', type=int, default=128,
+                        metavar='N', help='size of Q dimension (used when representing I/Q plane as image)')
+    parser.add_argument('--I_bounds', type=float, default=(-1, 1),
+                        nargs=2, help='range of values to represent in I dimension of I/Q image')
+    parser.add_argument('--Q_bounds', type=float, default=(-1, 1),
+                        nargs=2, help='range of values to represent in Q dimension of I/Q image')
+    parser.add_argument('--restore_path', type=str,
+                        metavar='S', help='path to .pth file from which to restore')
     parser.add_argument('--burnin', type=int, default=50,
                         metavar='N', help='burnin')
     parser.add_argument('--batch_size', type=int, default=64,
@@ -79,21 +91,47 @@ if __name__ == '__main__':
     log_dir = os.path.join('runs', args.data, current_time)
     print('log dir: {log_dir}'.format(log_dir=log_dir))
 
-    get_loader_kwargs = {}
+    get_loader_kwargs  = {}
+    to_st_train_kwargs = {}
+    to_st_test_kwargs  = {}
 
     if args.data == 'MNIST':
         im_dims = (1, 28, 28)
+        ref_im_dims = (1, 28, 28)
         target_size = 10
         from data.load_mnist import get_mnist_loader as get_loader
+        from data.utils import image2spiketrain as to_spike_train
+        # Set "to spike train" kwargs
+        n_iters = args.n_iters
+        n_iters_test = args.n_iters_test
+        for to_st_kwargs in (to_st_train_kwargs, to_st_test_kwargs):
+            to_st_kwargs['input_shape'] = im_dims
+            to_st_kwargs['gain'] = 100
+        to_st_train_kwargs['min_duration'] = n_iters - 1
+        to_st_train_kwargs['max_duration'] = n_iters
+        to_st_test_kwargs['min_duration'] = n_iters_test - 1
+        to_st_test_kwargs['max_duration'] = n_iters_test
 
     elif args.data == 'RadioML':
-        im_dims = (2, 1, 1024)
+        im_dims = (1, args.Q_resolution, args.I_resolution)
+        ref_im_dims = (2, 1, 1024)
         target_size = 24
         from data.load_radio_ml import get_radio_ml_loader as get_loader
+        from data.utils import iq2spiketrain as to_spike_train
+        # Set "get loader" kwargs
         get_loader_kwargs['data_dir'] = args.radio_ml_data_dir
+        # Set "to spike train" kwargs
+        n_iters = 1024
+        n_iters_test = 1024
+        for to_st_kwargs in (to_st_train_kwargs, to_st_test_kwargs):
+            to_st_kwargs['out_w'] = args.I_resolution
+            to_st_kwargs['out_h'] = args.Q_resolution
+            to_st_kwargs['min_I'] = args.I_bounds[0]
+            to_st_kwargs['max_I'] = args.I_bounds[1]
+            to_st_kwargs['min_Q'] = args.Q_bounds[0]
+            to_st_kwargs['max_Q'] = args.Q_bounds[1]
+            to_st_kwargs['max_duration'] = n_iters
 
-    n_iters = args.n_iters
-    n_iters_test = args.n_iters_test
     # number of test samples: n_test * batch_size_test
     n_test = np.ceil(float(args.n_test_samples) /
                      args.batch_size_test).astype(int)
@@ -106,9 +144,24 @@ if __name__ == '__main__':
     convs = load_network_spec(args.network_spec)
     net = ConvNetwork(args, im_dims, args.batch_size, convs, target_size,
                       act=torch.nn.Sigmoid(), loss=loss, opt=opt, opt_param=opt_param, burnin=burnin)
+
+    if args.restore_path:
+        print('-' * 80)
+        if not os.path.isfile(args.restore_path):
+            print('ERROR: Cannot load `%s`.' % args.restore_path)
+            print('File does not exist! Aborting load...')
+        else:
+            state_dict = torch.load(args.restore_path)
+            net.load_state_dict(state_dict)
+            print('Loaded the SNN model from `%s`.' % args.restore_path)
+        print('-' * 80)
+
+    net = net.to(device)
     net.reset(True)
 
-    ref_net = ReferenceConvNetwork(args, im_dims, convs, loss, opt, opt_param, target_size)
+    ref_convs = load_network_spec(args.ref_network_spec)
+    ref_net = ReferenceConvNetwork(args, ref_im_dims, ref_convs, loss, opt, opt_param, target_size)
+    ref_net = ref_net.to(device)
 
     writer = SummaryWriter(log_dir=log_dir, comment='%s Conv' % args.data)
     dumper = NetworkDumper(writer, net)
@@ -137,10 +190,9 @@ if __name__ == '__main__':
 
     for step in range(args.n_steps):
         if ((step + 1) % 1000) == 0:
-            net.dcll_slices[0].optimizer.param_groups[-1]['lr'] /= 2
-            net.dcll_slices[1].optimizer.param_groups[-1]['lr'] /= 2
-            net.dcll_slices[2].optimizer.param_groups[-1]['lr'] /= 2
-            net.dcll_slices[2].optimizer2.param_groups[-1]['lr'] /= 2
+            for i in range(len(net.dcll_slices)):
+                net.dcll_slices[i].optimizer.param_groups[-1]['lr'] /= 2
+            net.dcll_slices[-1].optimizer2.param_groups[-1]['lr'] /= 2
             ref_net.optim.param_groups[-1]['lr'] /= 2
             print('Adjusting learning rates')
 
@@ -151,16 +203,12 @@ if __name__ == '__main__':
             input, labels = next(gen_train)
         labels = to_one_hot(labels, target_size)
 
-        input_spikes, labels_spikes = image2spiketrain(input, labels,
-                                                       input_shape=im_dims,
-                                                       target_size=target_size,
-                                                       min_duration=n_iters-1,
-                                                       max_duration=n_iters,
-                                                       gain=100)
+        input_spikes, labels_spikes = to_spike_train(input, labels,
+                                                     **to_st_train_kwargs)
         input_spikes = torch.Tensor(input_spikes).to(device)
         labels_spikes = torch.Tensor(labels_spikes).to(device)
 
-        ref_input = torch.Tensor(input).to(device).reshape(-1, *im_dims)
+        ref_input = torch.Tensor(input).to(device).reshape(-1, *ref_im_dims)
         ref_label = torch.Tensor(labels).to(device)
 
         # Train
@@ -176,12 +224,8 @@ if __name__ == '__main__':
         if (step % args.n_test_interval) == 0:
             test_idx = step // args.n_test_interval
             for i, test_data in enumerate(all_test_data):
-                test_input, test_labels = image2spiketrain(*test_data,
-                                                           input_shape=im_dims,
-                                                           target_size=target_size,
-                                                           min_duration=n_iters_test-1,
-                                                           max_duration=n_iters_test,
-                                                           gain=100)
+                test_input, test_labels = to_spike_train(*test_data,
+                                                         **to_st_test_kwargs)
                 try:
                     test_input = torch.Tensor(test_input).to(device)
                 except RuntimeError as e:
@@ -190,7 +234,7 @@ if __name__ == '__main__':
                     raise
 
                 test_labels1h = torch.Tensor(test_labels).to(device)
-                test_ref_input = torch.Tensor(test_data[0]).to(device).reshape(-1, *im_dims)
+                test_ref_input = torch.Tensor(test_data[0]).to(device).reshape(-1, *ref_im_dims)
                 test_ref_label = torch.Tensor(test_data[1]).to(device)
 
                 net.reset()
@@ -211,12 +255,14 @@ if __name__ == '__main__':
             if not args.no_save:
                 np.save(d + '/acc_test.npy', acc_test)
                 np.save(d + '/acc_test_ref.npy', acc_test_ref)
-                parameter_dict = {
-                    name: data.detach().cpu().numpy()
-                    for (name, data) in net.named_parameters()
-                }
-                with open(d + '/parameters_{}.pkl'.format(step), 'wb') as f:
-                    pickle.dump(parameter_dict, f)
+
+                # Save network parameters
+                save_path = os.path.join(d, 'parameters_{}.pth'.format(step))
+                torch.save(net.cpu().state_dict(), save_path)
+                net = net.to(device)
+                print('-' * 80)
+                print('Saved network parameters to `%s`.' % save_path)
+                print('-' * 80)
 
             acc = np.mean(acc_test[test_idx], axis=0)
             acc_ref = np.mean(acc_test_ref[test_idx], axis=0)
