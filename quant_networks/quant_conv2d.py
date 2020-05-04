@@ -194,6 +194,21 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
             1./(1-self.alphas), requires_grad=False)
 
     def forward(self, input):
+        output_scale = None
+        output_bit_width = None
+        quant_bias_bit_width = None
+
+        input, input_scale, input_bit_width = self.unpack_input(input)
+        quant_weight, quant_weight_scale, quant_weight_bit_width = self.weight_quant(self.weight)
+        quant_weight = self.weight_reg(quant_weight)
+
+        if self.compute_output_bit_width:
+            assert input_bit_width is not None
+            output_bit_width = self.max_output_bit_width(input_bit_width, quant_weight_bit_width)
+        if self.compute_output_scale:
+            assert input_scale is not None
+            output_scale = input_scale * quant_weight_scale
+            
         # input: input tensor of shape (minibatch x in_channels x iH x iW)
         # weight: filters of shape (out_channels x (in_channels / groups) x kH x kW)
         if not (input.shape[0] == self.state.eps0.shape[0] == self.state.eps1.shape[0]):
@@ -203,7 +218,7 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
 
         eps0 = input * self.tau_s__dt + self.alphas * self.state.eps0
         eps1 = self.alpha * self.state.eps1 + eps0 * self.tau_m__dt
-        pvmem = F.conv2d(eps1, self.weight, self.bias, self.stride,
+        pvmem = F.conv2d(eps1, quant_weight, self.bias, self.stride,
                          self.padding, self.dilation, self.groups)
         pv = self.act(pvmem)
         output = self.output_act(pvmem)
