@@ -75,7 +75,7 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
         weight_bit_width_impl_override = None
         weight_bit_width_impl_type = BitWidthImplType.CONST
         weight_restrict_bit_width_type = RestrictValueType.INT
-        weight_bit_width = 32
+        weight_bit_width = 4
         weight_min_overall_bit_width = 2
         weight_max_overall_bit_width = None
         weight_scaling_impl_type = ScalingImplType.STATS
@@ -143,6 +143,25 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
         self.bias_quant = BiasQuantProxy(quant_type=bias_quant_type,
                                          bit_width=bias_bit_width,
                                          narrow_range=bias_narrow_range)        
+
+    @property
+    def int_weight(self):
+        if isinstance(self.weight_quant.tensor_quant, IdentityQuant):
+            raise Exception("Can't export int weight without quantization enabled")
+        return self.weight_quant.int_weight(self.weight)
+
+    @property
+    def quant_weight_scale(self):
+        """
+        Returns scale factor of the quantized weights with scalar () shape or (self.out_channels, 1, 1, 1)
+        shape depending on whether scaling is per layer or per-channel.
+        -------
+        """
+        if isinstance(self.weight_quant.tensor_quant, IdentityQuant):
+            raise Exception("Can't generate scaling factor without quantization enabled")
+        zero_hw_sentinel = self.weight_quant.zero_hw_sentinel
+        _, scale, _ = self.weight_quant.tensor_quant(self.weight, zero_hw_sentinel)
+        return scale
 
 
     def reset_parameters(self):
