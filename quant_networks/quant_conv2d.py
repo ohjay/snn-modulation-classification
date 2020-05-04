@@ -213,7 +213,6 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
             1./(1-self.alphas), requires_grad=False)
 
     def forward(self, input):
-        print("Forward")
         output_scale = None
         output_bit_width = None
         quant_bias_bit_width = None
@@ -221,7 +220,6 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
         input, input_scale, input_bit_width = self.unpack_input(input)
         quant_weight, quant_weight_scale, quant_weight_bit_width = self.weight_quant(self.weight)
         quant_weight = self.weight_reg(quant_weight)
-        print(quant_weight)
 
         if self.compute_output_bit_width:
             assert input_bit_width is not None
