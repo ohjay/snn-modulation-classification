@@ -3,7 +3,9 @@ import torch
 import numpy as np
 from ast import literal_eval as make_tuple
 
-from dcll.pytorch_libdcll import Conv2dDCLLlayer, DenseDCLLlayer, device, DCLLClassification
+#from dcll.pytorch_libdcll import Conv2dDCLLlayer, DenseDCLLlayer, device, DCLLClassification
+from dcll.pytorch_libdcll import DenseDCLLlayer, device, DCLLClassification
+from .quant_conv2d import QuantConv2dDCLLlayer
 
 
 def load_network_spec(yaml_path):
@@ -95,14 +97,14 @@ class ReferenceConvNetwork(torch.nn.Module):
         return self.acc
 
 
-class ConvNetwork(torch.nn.Module):
+class QuantConvNetwork(torch.nn.Module):
     def __init__(self, args, im_dims, batch_size, convs,
                  target_size, act,
                  loss, opt, opt_param,
                  DCLLSlice=DCLLClassification,
                  burnin=50
                  ):
-        super(ConvNetwork, self).__init__()
+        super(QuantConvNetwork, self).__init__()
         self.batch_size = batch_size
 
         def make_conv(inp, conf, is_output_layer=False):
@@ -111,7 +113,7 @@ class ConvNetwork(torch.nn.Module):
             padding      = conf['padding']
             pooling      = conf['pooling']
 
-            layer = Conv2dDCLLlayer(in_channels=inp[0],
+            layer = QuantConv2dDCLLlayer(in_channels=inp[0],
                                     out_channels=int(out_channels * args.netscale),
                                     kernel_size=kernel_size,
                                     padding=padding,
