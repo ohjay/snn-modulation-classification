@@ -9,9 +9,11 @@ import logging
 from collections import Counter
 import math
 
-from dcll.pytorch_libdcll import device
+from dcll.pytorch_libdcll import device, ContinuousConv2D
 
-class QuantContinuousConv2D(nn.Module):
+from brevitas.nn.quant_layer import QuantLayer
+
+class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
     NeuronState = namedtuple('NeuronState', ('eps0', 'eps1'))
 
     def __init__(self,
@@ -29,50 +31,27 @@ class QuantContinuousConv2D(nn.Module):
                  random_tau=False,
                  spiking=True,
                  **kwargs):
-        super(QuantContinuousConv2D, self).__init__()
+        #super(QuantContinuousConv2D, self).__init__()
+        ContinuousConv2D.__init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride=1,
+                 padding=2,
+                 dilation=1,
+                 groups=1,
+                 bias=True,
+                 alpha=.95,
+                 alphas=.9,
+                 act=nn.Sigmoid(),
+                 random_tau=False,
+                 spiking=True,
+                 **kwargs)
 
-        if in_channels % groups != 0:
-            raise ValueError('in_channels must be divisible by groups')
-        if out_channels % groups != 0:
-            raise ValueError('out_channels must be divisible by groups')
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-
-        if isinstance(kernel_size, int):
-            kernel_size = (kernel_size, kernel_size)
-
-        if isinstance(padding, int):
-            padding = (padding, padding)
-
-        self.random_tau = random_tau
-        self.kernel_size = kernel_size
-        self.stride = stride
-        self.padding = padding
-        self.dilation = dilation
-        self.groups = groups
-        self.act = act
-        self.spiking = spiking
-        if spiking:
-            self.output_act = lambda x: (x > 0).float()
-        else:
-            self.output_act = lambda x: x
-
-        self.weight = nn.Parameter(torch.Tensor(
-            out_channels, in_channels // groups, *self.kernel_size))
-        if bias:
-            self.bias = nn.Parameter(torch.Tensor(out_channels))
-        else:
-            self.register_parameter('bias', None)
-        self.reset_parameters()
-        self.alpha = torch.nn.Parameter(
-            torch.Tensor([alpha]), requires_grad=False)
-        self.tau_m__dt = torch.nn.Parameter(
-            torch.Tensor([1./(1-self.alpha)]), requires_grad=False)
-        self.alphas = torch.nn.Parameter(
-            torch.Tensor([alphas]), requires_grad=False)
-        self.tau_s__dt = torch.nn.Parameter(torch.Tensor(
-            [1./(1-self.alphas)]), requires_grad=False)
-        print(act)
+        QuantLayer.__init__(self, # Take default values from Brevitas example QuantConv2D
+               compute_output_scale=False,
+               compute_output_bit_width=False,
+               return_quant_tensor=False)
 
     def reset_parameters(self):
         n = self.in_channels
