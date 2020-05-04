@@ -140,53 +140,6 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
                                                  scaling_stats_sigma=weight_scaling_stats_sigma,
                                                  scaling_min_val=weight_scaling_min_val,
                                                  override_pretrained_bit_width=weight_override_pretrained_bit_width)
-        self.eps0_quant = WeightQuantProxy(bit_width=weight_bit_width,
-                                             quant_type=weight_quant_type,
-                                             narrow_range=weight_narrow_range,
-                                             scaling_override=weight_scaling_override,
-                                             restrict_scaling_type=weight_restrict_scaling_type,
-                                             scaling_const=weight_scaling_const,
-                                             scaling_stats_op=weight_scaling_stats_op,
-                                             scaling_impl_type=weight_scaling_impl_type,
-                                             scaling_stats_reduce_dim=weight_scaling_stats_reduce_dim,
-                                             scaling_shape=weight_scaling_shape,
-                                             bit_width_impl_type=weight_bit_width_impl_type,
-                                             bit_width_impl_override=weight_bit_width_impl_override,
-                                             restrict_bit_width_type=weight_restrict_bit_width_type,
-                                             min_overall_bit_width=weight_min_overall_bit_width,
-                                             max_overall_bit_width=weight_max_overall_bit_width,
-                                             tracked_parameter_list_init=self.state.eps0,
-                                             ternary_threshold=weight_ternary_threshold,
-                                             scaling_stats_input_view_shape_impl=weight_stats_input_view_shape_impl,
-                                             scaling_stats_input_concat_dim=weight_scaling_stats_input_concat_dim,
-                                             scaling_stats_sigma=weight_scaling_stats_sigma,
-                                             scaling_min_val=weight_scaling_min_val,
-                                             override_pretrained_bit_width=weight_override_pretrained_bit_width)
-
-        self.eps1_quant = WeightQuantProxy(bit_width=weight_bit_width,
-                                             quant_type=weight_quant_type,
-                                             narrow_range=weight_narrow_range,
-                                             scaling_override=weight_scaling_override,
-                                             restrict_scaling_type=weight_restrict_scaling_type,
-                                             scaling_const=weight_scaling_const,
-                                             scaling_stats_op=weight_scaling_stats_op,
-                                             scaling_impl_type=weight_scaling_impl_type,
-                                             scaling_stats_reduce_dim=weight_scaling_stats_reduce_dim,
-                                             scaling_shape=weight_scaling_shape,
-                                             bit_width_impl_type=weight_bit_width_impl_type,
-                                             bit_width_impl_override=weight_bit_width_impl_override,
-                                             restrict_bit_width_type=weight_restrict_bit_width_type,
-                                             min_overall_bit_width=weight_min_overall_bit_width,
-                                             max_overall_bit_width=weight_max_overall_bit_width,
-                                             tracked_parameter_list_init=self.state.eps1,
-                                             ternary_threshold=weight_ternary_threshold,
-                                             scaling_stats_input_view_shape_impl=weight_stats_input_view_shape_impl,
-                                             scaling_stats_input_concat_dim=weight_scaling_stats_input_concat_dim,
-                                             scaling_stats_sigma=weight_scaling_stats_sigma,
-                                             scaling_min_val=weight_scaling_min_val,
-                                             override_pretrained_bit_width=weight_override_pretrained_bit_width)
-
-
         self.bias_quant = BiasQuantProxy(quant_type=bias_quant_type,
                                          bit_width=bias_bit_width,
                                          narrow_range=bias_narrow_range)        
@@ -282,11 +235,8 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
                             .format(self.state.eps0.shape[0], input.shape[0]))
             self.init_state(input.shape[0], input.shape[2:4])
 
-        quant_eps0, quant_eps0_scale, quant_eps0_bit_width = self.eps0_quant(self.state.eps0)
-        quant_eps1, quant_eps1_scale, quant_eps1_bit_width = self.eps1_quant(self.state.eps1)
-
-        eps0 = input * self.tau_s__dt + self.alphas * quant_eps0
-        eps1 = self.alpha * quant_eps1 + eps0 * self.tau_m__dt
+        eps0 = input * self.tau_s__dt + self.alphas * self.state.eps0
+        eps1 = self.alpha * self.state.eps1 + eps0 * self.tau_m__dt
         pvmem = F.conv2d(eps1, quant_weight, self.bias, self.stride,
                          self.padding, self.dilation, self.groups)
         pv = self.act(pvmem)
