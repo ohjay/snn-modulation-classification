@@ -75,3 +75,5 @@ dcll.egg-info/
 .pydevproject
 runs2/
 data/MNIST/
+iq_plot.png
+spike_train.gif

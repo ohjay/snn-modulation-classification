@@ -276,7 +276,7 @@ class AnalogDenseDCLLlayer(nn.Module):
 
     def forward(self, x):
         out = self.i2h(x)       # Hidden layer activity
-        pout = self.i2o(out)    # Error layer acticity
+        pout = self.i2o(out)    # Error layer activity
         out = out.detach()      # Disable learning on the output
         return out, pout
 
