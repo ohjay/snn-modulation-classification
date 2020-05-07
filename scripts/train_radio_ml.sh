@@ -33,4 +33,4 @@ python -u train.py \
     --burnin $burnin \
     --batch_size $batch_size \
     --batch_size_test $batch_size_test \
-    --n_test_samples $n_test_samples >> ${1} 2>&1
+    --n_test_samples $n_test_samples
