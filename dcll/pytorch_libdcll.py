@@ -591,11 +591,9 @@ class Conv2dDCLLlayer(nn.Module):
         pvoutput = self.dropout(self.i2o(flatten))
 
         if self.output_layer:
-            custom_output = self.output_(flatten.detach())
-        else:
-            custom_output = output
+            output = self.output_(flatten.detach())
 
-        return custom_output, pvoutput, pv, pvmem
+        return output, pvoutput, pv, pvmem
 
     def init_hiddens(self, batch_size, init_value=0):
         self.i2h.init_state(batch_size, self.im_dims, init_value=init_value)
@@ -615,7 +613,8 @@ class DCLLBase(nn.Module):
         super(DCLLBase, self).__init__()
         self.dclllayer = dclllayer
         self.crit = loss().to(device)
-        self.output_crit = nn.CrossEntropyLoss().to(device)
+        # self.output_crit = nn.CrossEntropyLoss().to(device)
+        self.output_crit = loss().to(device)
         self.optimizer = optimizer(
             dclllayer.i2h.parameters(), **kwargs_optimizer)
         if self.dclllayer.output_layer:
@@ -676,7 +675,7 @@ class DCLLBase(nn.Module):
             self.dclllayer.zero_grad()
             tgt_loss = self.crit(pvoutput, target)
             if self.dclllayer.output_layer:
-                out_loss = self.output_crit(output, target.argmax(-1))
+                out_loss = self.output_crit(output, target)
                 tgt_loss += out_loss
             if regularize > 0:
                 reg_loss = 200e-1*regularize*torch.mean(torch.relu(pvmem+.01))
@@ -710,9 +709,8 @@ class DCLLClassification(DCLLBase):
         writer.add_scalar(self.name + '/acc/' + label, self.acc, epoch)
 
     def accuracy(self, targets):
-        cl = np.array(self.clout)
-        begin = cl.shape[0]
-        self.acc = accuracy_by_vote(cl, targets[-begin:])
+        begin = len(self.clout)
+        self.acc = accuracy_by_vote(self.clout, targets[-begin:])
         return self.acc
 
 
