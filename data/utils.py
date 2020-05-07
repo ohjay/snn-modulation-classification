@@ -35,7 +35,7 @@ def image2spiketrain(x, y, input_shape,
     return all_inputs, all_target
 
 def iq2spiketrain(x, y, out_w=28, out_h=28,
-                  min_I=-1, max_I=1, min_Q=-1, max_Q=1, max_duration=500):
+                  min_I=-1, max_I=1, min_Q=-1, max_Q=1, max_duration=500, do_gamma=True):
     """Convert each I/Q sample to a spike in the I/Q plane over time.
     Assumption: the (squeezed) shape of X is (batch, 2, num_timesteps).
     """
@@ -49,11 +49,22 @@ def iq2spiketrain(x, y, out_w=28, out_h=28,
         # Obtain I/Q values
         I_value = x[:, 0, t]
         Q_value = x[:, 1, t]
-        # Quantize to cells in image
-        cell_I = (I_value - min_I) / (max_I - min_I) * out_w
-        cell_Q = (Q_value - min_Q) / (max_Q - min_Q) * out_h
-        cell_I = torch.clamp(cell_I, 0, out_w - 1).int()
-        cell_Q = torch.clamp(cell_Q, 0, out_h - 1).int()
+        # Shift and rescale so that relevant values are in [0, 1]
+        cell_I = (I_value - min_I) / (max_I - min_I)
+        cell_Q = (Q_value - min_Q) / (max_Q - min_Q)
+        if do_gamma:
+            # Shift and rescale so that relevant values are in [-1, 1]
+            cell_I = cell_I * 2.0 - 1.0
+            cell_Q = cell_Q * 2.0 - 1.0
+            # Gamma-encode (use more of precision range for middle values)
+            cell_I = cell_I.sign() * (cell_I.abs() ** (1.0 / 1.2))
+            cell_Q = cell_Q.sign() * (cell_Q.abs() ** (1.0 / 1.2))
+            # Shift and rescale so that relevant values are in [0, 1]
+            cell_I = (cell_I + 1.0) * 0.5
+            cell_Q = (cell_Q + 1.0) * 0.5
+        # Quantize to cells in image (scale, clamp, convert to int)
+        cell_I = torch.clamp(cell_I * out_w, 0, out_w - 1).int()
+        cell_Q = torch.clamp(cell_Q * out_h, 0, out_h - 1).int()
         # Assign events to samples
         for b in range(batch_size):
             spike_trains[t, b, 0, cell_Q[b], cell_I[b]] = 1
