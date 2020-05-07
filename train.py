@@ -49,9 +49,9 @@ def parse_args():
                         metavar='N', help='how many steps to run before testing')
     parser.add_argument('--n_test_samples', type=int, default=128,
                         metavar='N', help='how many test samples to use')
-    parser.add_argument('--n_iters', type=int, default=500, metavar='N',
+    parser.add_argument('--n_iters', type=int, default=1024, metavar='N',
                         help='for how many ms do we present a sample during classification')
-    parser.add_argument('--n_iters_test', type=int, default=1500, metavar='N',
+    parser.add_argument('--n_iters_test', type=int, default=1024, metavar='N',
                         help='for how many ms do we present a sample during classification')
     parser.add_argument('--optim_type', type=str, default='Adamax',
                         metavar='S', help='which optimizer to use')
@@ -95,6 +95,9 @@ if __name__ == '__main__':
     to_st_train_kwargs = {}
     to_st_test_kwargs  = {}
 
+    n_iters = args.n_iters
+    n_iters_test = args.n_iters_test
+
     if args.data == 'MNIST':
         im_dims = (1, 28, 28)
         ref_im_dims = (1, 28, 28)
@@ -102,8 +105,6 @@ if __name__ == '__main__':
         from data.load_mnist import get_mnist_loader as get_loader
         from data.utils import image2spiketrain as to_spike_train
         # Set "to spike train" kwargs
-        n_iters = args.n_iters
-        n_iters_test = args.n_iters_test
         for to_st_kwargs in (to_st_train_kwargs, to_st_test_kwargs):
             to_st_kwargs['input_shape'] = im_dims
             to_st_kwargs['gain'] = 100
@@ -121,8 +122,6 @@ if __name__ == '__main__':
         # Set "get loader" kwargs
         get_loader_kwargs['data_dir'] = args.radio_ml_data_dir
         # Set "to spike train" kwargs
-        n_iters = 1024
-        n_iters_test = 1024
         for to_st_kwargs in (to_st_train_kwargs, to_st_test_kwargs):
             to_st_kwargs['out_w'] = args.I_resolution
             to_st_kwargs['out_h'] = args.Q_resolution
@@ -130,7 +129,8 @@ if __name__ == '__main__':
             to_st_kwargs['max_I'] = args.I_bounds[1]
             to_st_kwargs['min_Q'] = args.Q_bounds[0]
             to_st_kwargs['max_Q'] = args.Q_bounds[1]
-            to_st_kwargs['max_duration'] = n_iters
+        to_st_train_kwargs['max_duration'] = n_iters
+        to_st_test_kwargs['max_duration'] = n_iters_test
 
     # number of test samples: n_test * batch_size_test
     n_test = np.ceil(float(args.n_test_samples) /
