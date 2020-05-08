@@ -612,14 +612,16 @@ class DCLLBase(nn.Module):
         """
         super(DCLLBase, self).__init__()
         self.dclllayer = dclllayer
-        self.crit = loss().to(device)
-        # self.output_crit = nn.CrossEntropyLoss().to(device)
-        self.output_crit = loss().to(device)
-        self.optimizer = optimizer(
-            dclllayer.i2h.parameters(), **kwargs_optimizer)
-        if self.dclllayer.output_layer:
-            self.optimizer2 = optimizer(
-                dclllayer.output_.parameters(), lr=1e-4)
+        if loss is not None:
+            self.crit = loss().to(device)
+            # self.output_crit = nn.CrossEntropyLoss().to(device)
+            self.output_crit = loss().to(device)
+        if optimizer is not None:
+            self.optimizer = optimizer(
+                dclllayer.i2h.parameters(), **kwargs_optimizer)
+            if self.dclllayer.output_layer:
+                self.optimizer2 = optimizer(
+                    dclllayer.output_.parameters(), lr=1e-4)
         self.burnin = burnin
         self.batch_size = batch_size
         self.collect_stats = collect_stats

@@ -13,7 +13,7 @@ class RadioMLDataset(data.Dataset):
     """
 
     def __init__(self, data_dir, train,
-                 normalize=True, min_snr=6, per_h5_frac=0.5, train_frac=0.9):
+                 normalize=True, min_snr=6, max_snr=30, per_h5_frac=0.5, train_frac=0.9):
 
         self.train = train
 
@@ -65,7 +65,7 @@ class RadioMLDataset(data.Dataset):
         # The data for each (class, SNR) pair
         # will be truncated to the first PER_H5_SIZE examples
         per_h5_size = int(per_h5_frac * 4096)
-        snr_count = (30 - min_snr) // 2 + 1
+        snr_count = (max_snr - min_snr) // 2 + 1
         train_split_size = int(train_frac * per_h5_size)
         if train:
             split_size = train_split_size
@@ -76,7 +76,7 @@ class RadioMLDataset(data.Dataset):
         self.X = np.zeros((total_size, 1024, 2), dtype=np.float32)
         self.Y = np.zeros(total_size, dtype=np.int64)
         for class_idx in range(24):
-            for snr_idx, snr in enumerate(range(min_snr, 32, 2)):
+            for snr_idx, snr in enumerate(range(min_snr, max_snr + 2, 2)):
                 class_snr_name = 'class%d_snr%d.hdf5' % (class_idx, snr)
                 h5f_path = os.path.join(data_dir, class_snr_name)
                 h5f = h5py.File(h5f_path, 'r')
@@ -110,8 +110,15 @@ class RadioMLDataset(data.Dataset):
 
 def get_radio_ml_loader(batch_size, train, taskid=0, **kwargs):
     data_dir = kwargs['data_dir']
-    dataset = RadioMLDataset(data_dir, train, normalize=False)
-    print('dataset size: %d' % len(dataset))
+    min_snr = kwargs.get('min_snr', 6)
+    max_snr = kwargs.get('max_snr', 30)
+    dataset = RadioMLDataset(data_dir, train,
+                             normalize=False,
+                             min_snr=min_snr,
+                             max_snr=max_snr)
+
+    identifier = 'train' if train else 'test'
+    print('[%s] dataset size: %d' % (identifier, len(dataset)))
 
     loader = DataLoader(dataset=dataset,
                         batch_size=batch_size,

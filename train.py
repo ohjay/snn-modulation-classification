@@ -19,6 +19,10 @@ def parse_args():
                         choices=['MNIST', 'RadioML'], help='which data to use')
     parser.add_argument('--radio_ml_data_dir', type=str, default='2018.01',
                         help='path to the folder containing the RadioML HDF5 file(s)')
+    parser.add_argument('--min_snr', type=int, default=6,
+                        metavar='N', help='minimum SNR (inclusive) to use during data loading')
+    parser.add_argument('--max_snr', type=int, default=30,
+                        metavar='N', help='maximum SNR (inclusive) to use during data loading')
     parser.add_argument('--network_spec', type=str, default='networks/radio_ml_conv.yaml',
                         metavar='S', help='path to YAML file describing net architecture')
     parser.add_argument('--ref_network_spec', type=str, default='networks/radio_ml_conv_ref.yaml',
@@ -57,8 +61,10 @@ def parse_args():
                         metavar='S', help='which optimizer to use')
     parser.add_argument('--loss_type', type=str, default='SmoothL1Loss',
                         metavar='S', help='which loss function to use')
-    parser.add_argument('--lr', type=float, default=2.5e-8,
-                        metavar='N', help='learning rate for Adamax')
+    parser.add_argument('--learning_rates', type=float, default=[1e-6],
+                        nargs='+', metavar='N', help='learning rates for each DCLL slice')
+    parser.add_argument('--ref_lr', type=float, default=1e-3,
+                        metavar='N', help='learning rate for reference network')
     parser.add_argument('--alpha', type=float, default=.92,
                         metavar='N', help='Time constant for neuron')
     parser.add_argument('--alphas', type=float, default=.85,
@@ -121,6 +127,8 @@ if __name__ == '__main__':
         from data.utils import iq2spiketrain as to_spike_train
         # Set "get loader" kwargs
         get_loader_kwargs['data_dir'] = args.radio_ml_data_dir
+        get_loader_kwargs['min_snr'] = args.min_snr
+        get_loader_kwargs['max_snr'] = args.max_snr
         # Set "to spike train" kwargs
         for to_st_kwargs in (to_st_train_kwargs, to_st_test_kwargs):
             to_st_kwargs['out_w'] = args.I_resolution
@@ -137,13 +145,15 @@ if __name__ == '__main__':
                      args.batch_size_test).astype(int)
 
     opt = getattr(torch.optim, args.optim_type)
-    opt_param = {'lr': args.lr, 'betas': [.0, args.beta]}
+    opt_param = {'betas': [0.0, args.beta]}
+    ref_opt_param = {'lr': args.ref_lr, 'betas': [0.0, args.beta]}
     loss = getattr(torch.nn, args.loss_type)
 
     burnin = args.burnin
     convs = load_network_spec(args.network_spec)
     net = ConvNetwork(args, im_dims, args.batch_size, convs, target_size,
-                      act=torch.nn.Sigmoid(), loss=loss, opt=opt, opt_param=opt_param, burnin=burnin)
+                      act=torch.nn.Sigmoid(), loss=loss, opt=opt, opt_param=opt_param,
+                      learning_rates=args.learning_rates, burnin=burnin)
 
     if args.restore_path:
         print('-' * 80)
@@ -160,7 +170,7 @@ if __name__ == '__main__':
     net.reset(True)
 
     ref_convs = load_network_spec(args.ref_network_spec)
-    ref_net = ReferenceConvNetwork(args, ref_im_dims, ref_convs, loss, opt, opt_param, target_size)
+    ref_net = ReferenceConvNetwork(args, ref_im_dims, ref_convs, loss, opt, ref_opt_param, target_size)
     ref_net = ref_net.to(device)
 
     writer = SummaryWriter(log_dir=log_dir, comment='%s Conv' % args.data)
@@ -214,11 +224,12 @@ if __name__ == '__main__':
         # Train
         net.reset()
         net.train()
-        ref_net.train()
         for sim_iteration in range(n_iters):
             net.learn(x=input_spikes[sim_iteration],
                       labels=labels_spikes[sim_iteration])
-            ref_net.learn(x=ref_input, labels=ref_label)
+
+        ref_net.train()
+        ref_net.learn(x=ref_input, labels=ref_label)
 
         # Test
         if (step % args.n_test_interval) == 0:
@@ -239,10 +250,10 @@ if __name__ == '__main__':
 
                 net.reset()
                 net.eval()
-                ref_net.eval()
                 for sim_iteration in range(n_iters_test):
                     net.test(x=test_input[sim_iteration])
 
+                ref_net.eval()
                 ref_net.test(test_ref_input)
 
                 acc_test[test_idx, i, :] = net.accuracy(test_labels1h)
@@ -266,6 +277,7 @@ if __name__ == '__main__':
 
             acc = np.mean(acc_test[test_idx], axis=0)
             acc_ref = np.mean(acc_test_ref[test_idx], axis=0)
-            print('Step {} \t Accuracy {} \t Ref {}'.format(step, acc, acc_ref))
+            step_str = str(step).zfill(5)
+            print('Step {} \t Accuracy {} \t Ref {}'.format(step_str, acc, acc_ref))
 
     writer.close()
