@@ -5,7 +5,7 @@ network_spec="networks/mnist_conv.yaml"
 ref_network_spec="networks/mnist_conv.yaml"
 
 batch_size=128
-batch_size_test=512
+batch_size_test=64
 n_test_samples=1024
 
 # -u to immediately print to stdout (for file redirect to see output before script ends)
