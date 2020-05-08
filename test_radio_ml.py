@@ -61,72 +61,79 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    im_dims = (1, args.Q_resolution, args.I_resolution)
-    target_size = 24
-    # Set "to spike train" kwargs
-    to_st_test_kwargs  = {
-        'out_w': args.I_resolution,
-        'out_h': args.Q_resolution,
-        'min_I': args.I_bounds[0],
-        'max_I': args.I_bounds[1],
-        'min_Q': args.Q_bounds[0],
-        'max_Q': args.Q_bounds[1],
-        'max_duration': args.n_iters_test,
-    }
-    n_test = np.ceil(float(args.n_test_samples) / args.batch_size_test).astype(int)
+    out_dir = os.path.dirname(args.restore_path)
+    with open(os.path.join(out_dir, 'snr_evaluation.txt'), 'a+') as logfile:
+        def print_and_log(text):
+            """Print TEXT to standard output, while also writing it to the log file."""
+            print(text)
+            logfile.write(text + '\n')
 
-    burnin = args.burnin
-    convs = load_network_spec(args.network_spec)
-    net = ConvNetwork(args, im_dims, args.batch_size_test, convs, target_size,
-                    act=torch.nn.Sigmoid(), loss=None, opt=None, opt_param={},
-                    learning_rates=None, burnin=burnin)
-
-    if args.restore_path:
-        print('-' * 80)
-        if not os.path.isfile(args.restore_path):
-            print('ERROR: Cannot load `%s`.' % args.restore_path)
-            print('File does not exist! Aborting...')
-            import sys; sys.exit(0)
-        else:
-            state_dict = torch.load(args.restore_path)
-            net.load_state_dict(state_dict)
-            print('Loaded the SNN model from `%s`.' % args.restore_path)
-        print('-' * 80)
-
-    net = net.to(device)
-    net.reset(True)
-
-    for snr in range(6, 32, 2):
-        start_time = time.time()
-        get_loader_kwargs  = {
-            'data_dir': args.radio_ml_data_dir,
-            'min_snr': snr,
-            'max_snr': snr,
+        im_dims = (1, args.Q_resolution, args.I_resolution)
+        target_size = 24
+        # Set "to spike train" kwargs
+        to_st_test_kwargs  = {
+            'out_w': args.I_resolution,
+            'out_h': args.Q_resolution,
+            'min_I': args.I_bounds[0],
+            'max_I': args.I_bounds[1],
+            'min_Q': args.Q_bounds[0],
+            'max_Q': args.Q_bounds[1],
+            'max_duration': args.n_iters_test,
         }
-        gen_test = iter(get_loader(args.batch_size_test, train=False, taskid=1, **get_loader_kwargs))
-        all_test_data = [next(gen_test) for i in range(n_test)]
-        all_test_data = [(samples, to_one_hot(labels, target_size))
-                        for (samples, labels) in all_test_data]
+        n_test = np.ceil(float(args.n_test_samples) / args.batch_size_test).astype(int)
 
-        # Test
-        acc_test = np.zeros([n_test, len(net.dcll_slices)])
-        for i, test_data in enumerate(all_test_data):
-            test_input, test_labels = to_spike_train(*test_data, **to_st_test_kwargs)
-            try:
-                test_input = torch.Tensor(test_input).to(device)
-            except RuntimeError as e:
-                print('Exception: ' + str(e) +
+        burnin = args.burnin
+        convs = load_network_spec(args.network_spec)
+        net = ConvNetwork(args, im_dims, args.batch_size_test, convs, target_size,
+                          act=torch.nn.Sigmoid(), loss=None, opt=None, opt_param={},
+                          learning_rates=None, burnin=burnin)
+
+        if args.restore_path:
+            print_and_log('-' * 80)
+            if not os.path.isfile(args.restore_path):
+                print_and_log('ERROR: Cannot load `%s`.' % args.restore_path)
+                print_and_log('File does not exist! Aborting...')
+                import sys; sys.exit(0)
+            else:
+                state_dict = torch.load(args.restore_path)
+                net.load_state_dict(state_dict)
+                print_and_log('Loaded the SNN model from `%s`.' % args.restore_path)
+            print_and_log('-' * 80)
+
+        net = net.to(device)
+        net.reset(True)
+
+        for snr in range(6, 32, 2):
+            start_time = time.time()
+            get_loader_kwargs  = {
+                'data_dir': args.radio_ml_data_dir,
+                'min_snr': snr,
+                'max_snr': snr,
+            }
+            gen_test = iter(get_loader(args.batch_size_test, train=False, taskid=1, **get_loader_kwargs))
+            all_test_data = [next(gen_test) for i in range(n_test)]
+            all_test_data = [(samples, to_one_hot(labels, target_size))
+                             for (samples, labels) in all_test_data]
+
+            # Test
+            acc_test = np.zeros([n_test, len(net.dcll_slices)])
+            for i, test_data in enumerate(all_test_data):
+                test_input, test_labels = to_spike_train(*test_data, **to_st_test_kwargs)
+                try:
+                    test_input = torch.Tensor(test_input).to(device)
+                except RuntimeError as e:
+                    print_and_log('Exception: ' + str(e) +
                         '. Try to decrease your batch_size_test with the --batch_size_test argument.')
-                raise
-            test_labels1h = torch.Tensor(test_labels).to(device)
+                    raise
+                test_labels1h = torch.Tensor(test_labels).to(device)
 
-            net.reset()
-            net.eval()
-            for sim_iteration in range(args.n_iters_test):
-                net.test(x=test_input[sim_iteration])
-            acc_test[i, :] = net.accuracy(test_labels1h)
+                net.reset()
+                net.eval()
+                for sim_iteration in range(args.n_iters_test):
+                    net.test(x=test_input[sim_iteration])
+                acc_test[i, :] = net.accuracy(test_labels1h)
 
-        acc = np.mean(acc_test, axis=0)
-        time_elapsed = (time.time() - start_time)
-        time_elapsed = '%.2f s' % time_elapsed
-        print('SNR {} \t Accuracy {} \t Time Elapsed {}'.format(str(snr).zfill(2), acc, time_elapsed))
+            acc = np.mean(acc_test, axis=0)
+            time_elapsed = (time.time() - start_time)
+            time_elapsed = '%.2f s' % time_elapsed
+            print_and_log('SNR {} \t Accuracy {} \t Time Elapsed {}'.format(str(snr).zfill(2), acc, time_elapsed))

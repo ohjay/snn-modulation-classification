@@ -96,6 +96,9 @@ if __name__ == '__main__':
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
     log_dir = os.path.join('runs', args.data, current_time)
     print('log dir: {log_dir}'.format(log_dir=log_dir))
+    out_dir = os.path.join(args.output, args.data, current_time)
+    os.makedirs(out_dir)
+    print('out dir: {out_dir}'.format(out_dir=out_dir))
 
     get_loader_kwargs  = {}
     to_st_train_kwargs = {}
@@ -177,13 +180,11 @@ if __name__ == '__main__':
     dumper = NetworkDumper(writer, net)
 
     if not args.no_save:
-        out_dir = os.path.join(args.output, args.data)
-        d = mksavedir(pre=out_dir)
-        annotate(d, text=log_dir, filename='log_filename.txt')
-        annotate(d, text=str(args), filename='args.txt')
-        with open(os.path.join(d, 'args.pkl'), 'wb') as fp:
+        annotate(out_dir, text=log_dir, filename='log_dir.txt')
+        annotate(out_dir, text=str(args), filename='args.txt')
+        with open(os.path.join(out_dir, 'args.pkl'), 'wb') as fp:
             pickle.dump(vars(args), fp)
-        save_source(d)
+        save_source(out_dir)
 
     n_tests_total = np.ceil(float(args.n_steps) /
                             args.n_test_interval).astype(int)
@@ -264,11 +265,11 @@ if __name__ == '__main__':
                     ref_net.write_stats(writer, step)
 
             if not args.no_save:
-                np.save(d + '/acc_test.npy', acc_test)
-                np.save(d + '/acc_test_ref.npy', acc_test_ref)
+                np.save(os.path.join(out_dir, 'acc_test.npy'), acc_test)
+                np.save(os.path.join(out_dir, 'acc_test_ref.npy'), acc_test_ref)
 
                 # Save network parameters
-                save_path = os.path.join(d, 'parameters_{}.pth'.format(step))
+                save_path = os.path.join(out_dir, 'parameters_{}.pth'.format(step))
                 torch.save(net.cpu().state_dict(), save_path)
                 net = net.to(device)
                 print('-' * 80)
