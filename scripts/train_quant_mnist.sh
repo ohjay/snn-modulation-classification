@@ -8,10 +8,13 @@ batch_size=128
 batch_size_test=512
 n_test_samples=1024
 
+weight_bit_width=8
+
 python -u quant_train.py \
     --data $data \
     --network_spec $network_spec \
     --ref_network_spec $ref_network_spec \
     --batch_size $batch_size \
     --batch_size_test $batch_size_test \
-    --n_test_samples $n_test_samples
+    --n_test_samples $n_test_samples \
+    --weight_bit_width $weight_bit_width

@@ -102,7 +102,8 @@ class QuantConvNetwork(torch.nn.Module):
                  target_size, act,
                  loss, opt, opt_param,
                  DCLLSlice=DCLLClassification,
-                 burnin=50
+                 burnin=50,
+                 weight_bit_width=8
                  ):
         super(QuantConvNetwork, self).__init__()
         self.batch_size = batch_size
@@ -125,7 +126,8 @@ class QuantConvNetwork(torch.nn.Module):
                                     random_tau=args.random_tau,
                                     spiking=True,
                                     lc_dropout=.5,
-                                    output_layer=is_output_layer
+                                    output_layer=is_output_layer,
+                                    weight_bit_width=args.weight_bit_width
                                     ).to(device).init_hiddens(batch_size)
             return layer, torch.Size([layer.out_channels]) + layer.output_shape
 

@@ -41,6 +41,7 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
                  act=nn.Sigmoid(),
                  random_tau=False,
                  spiking=True,
+                 weight_bit_width=8,
                  **kwargs):
         #super(QuantContinuousConv2D, self).__init__()
         ContinuousConv2D.__init__(self,
@@ -64,6 +65,10 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
                compute_output_bit_width=False,
                return_quant_tensor=False)
 
+        self.weight_bit_width = weight_bit_width
+
+        print("[QuantConv2dDCLL] weight_bit_width set to {}".format(self.weight_bit_width))
+
         # For now take default parameters from QuantConv2D in Brevitas an hardcode here:
         bias_quant_type = QuantType.FP
         bias_narrow_range = False
@@ -75,7 +80,7 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
         weight_bit_width_impl_override = None
         weight_bit_width_impl_type = BitWidthImplType.CONST
         weight_restrict_bit_width_type = RestrictValueType.INT
-        weight_bit_width = 8
+        weight_bit_width = self.weight_bit_width
         weight_min_overall_bit_width = 2
         weight_max_overall_bit_width = None
         weight_scaling_impl_type = ScalingImplType.STATS
@@ -454,7 +459,8 @@ class QuantConv2dDCLLlayer(nn.Module):
                  lc_ampl=.5,
                  spiking=True,
                  random_tau=False,
-                 output_layer=False):
+                 output_layer=False,
+                 weight_bit_width=8):
 
         super(QuantConv2dDCLLlayer, self).__init__()
         self.im_dims = im_dims
@@ -485,7 +491,7 @@ class QuantConv2dDCLLlayer(nn.Module):
                                                           stride=stride, alpha=alpha, alphas=alphas, alpharp=alpharp, wrp=wrp, act=act, random_tau=random_tau)
         else:
             self.i2h = QuantContinuousConv2D(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
-                                        stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau)
+                                        stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau, weight_bit_width=weight_bit_width)
         conv_shape = self.i2h.get_output_shape(self.im_dims)
         print('Quant Conv2D Layer ', self.im_dims, conv_shape, self.in_channels,
               self.out_channels, kernel_size, dilation, padding, stride)

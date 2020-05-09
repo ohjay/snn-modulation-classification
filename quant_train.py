@@ -80,6 +80,8 @@ def parse_args():
                         help='comment to name tensorboard files')
     parser.add_argument('--output', type=str, default='results',
                         help='folder name for the results')
+    parser.add_argument('--weight_bit_width', type=int, default='8',
+                        help='Bit width for quantization of DCLL layer weights')
     return parser.parse_args()
 
 
