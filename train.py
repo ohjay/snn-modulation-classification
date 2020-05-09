@@ -6,6 +6,8 @@ import argparse
 import datetime
 from tensorboardX import SummaryWriter
 
+import subprocess # execute git command
+
 from dcll.pytorch_libdcll import device
 from dcll.experiment_tools import mksavedir, save_source, annotate
 from dcll.pytorch_utils import grad_parameters, named_grad_parameters, NetworkDumper, tonumpy
@@ -174,6 +176,12 @@ if __name__ == '__main__':
         with open(os.path.join(d, 'args.pkl'), 'wb') as fp:
             pickle.dump(vars(args), fp)
         save_source(d)
+
+        # Log python commit
+        commit_logfile = open(os.path.join(d, 'current_commit.txt'), 'w')
+        commit_msg = subprocess.check_output('git log -1', shell=True)
+        commit_logfile.write(commit_msg.decode('utf-8'))
+        commit_logfile.close()
 
     n_tests_total = np.ceil(float(args.n_steps) /
                             args.n_test_interval).astype(int)
