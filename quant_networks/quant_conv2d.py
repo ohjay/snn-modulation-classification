@@ -200,6 +200,83 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
             self.randomize_tau(im_dims)
             self.random_tau = False
 
+        # For now take default parameters from QuantConv2D in Brevitas an hardcode here:
+        bias_quant_type = QuantType.FP
+        bias_narrow_range = False
+        bias_bit_width = None
+        weight_quant_override = None
+        weight_quant_type = QuantType.INT
+        weight_narrow_range = False
+        weight_scaling_override = None
+        weight_bit_width_impl_override = None
+        weight_bit_width_impl_type = BitWidthImplType.CONST
+        weight_restrict_bit_width_type = RestrictValueType.INT
+        weight_bit_width = self.weight_bit_width
+        weight_min_overall_bit_width = 2
+        weight_max_overall_bit_width = None
+        weight_scaling_impl_type = ScalingImplType.STATS
+        weight_scaling_const = None
+        weight_scaling_stats_op = StatsOp.MAX
+        weight_scaling_per_output_channel = False
+        weight_ternary_threshold = 0.5
+        weight_restrict_scaling_type = RestrictValueType.LOG_FP
+        weight_scaling_stats_sigma = 3.0
+        weight_scaling_min_val = SCALING_MIN_VAL
+        weight_override_pretrained_bit_width = False
+        compute_output_scale = False
+        compute_output_bit_width = False
+        return_quant_tensor = False
+
+        if weight_quant_type == QuantType.FP and compute_output_bit_width:
+            raise Exception("Computing output bit width requires enabling quantization")
+        if bias_quant_type != QuantType.FP and not (compute_output_scale and compute_output_bit_width):
+            raise Exception("Quantizing bias requires to compute output scale and output bit width")
+
+        #self.per_elem_ops = 2 * self.kernel_size[0] * self.kernel_size[1] * (in_channels // groups)
+        #self.padding_type = padding_type
+        self.weight_reg = WeightReg()
+
+        if weight_quant_override is not None:
+            self.weight_quant = weight_quant_override
+            self.weight_quant.add_tracked_parameter(self.weight)
+        else:
+            weight_scaling_stats_input_concat_dim = 1
+            if weight_scaling_per_output_channel:
+                weight_stats_input_view_shape_impl = StatsInputViewShapeImpl.OVER_OUTPUT_CHANNELS
+                weight_scaling_shape = self.per_output_channel_broadcastable_shape
+                weight_scaling_stats_reduce_dim = 1
+            else:
+                weight_stats_input_view_shape_impl = StatsInputViewShapeImpl.OVER_TENSOR
+                weight_scaling_shape = SCALING_SCALAR_SHAPE
+                weight_scaling_stats_reduce_dim = None
+
+            if weight_scaling_stats_op == StatsOp.MAX_AVE:
+                weight_stats_input_view_shape_impl = StatsInputViewShapeImpl.OVER_OUTPUT_CHANNELS
+                weight_scaling_stats_reduce_dim = 1
+
+            self.weight_quant = WeightQuantProxy(bit_width=weight_bit_width,
+                                                 quant_type=weight_quant_type,
+                                                 narrow_range=weight_narrow_range,
+                                                 scaling_override=weight_scaling_override,
+                                                 restrict_scaling_type=weight_restrict_scaling_type,
+                                                 scaling_const=weight_scaling_const,
+                                                 scaling_stats_op=weight_scaling_stats_op,
+                                                 scaling_impl_type=weight_scaling_impl_type,
+                                                 scaling_stats_reduce_dim=weight_scaling_stats_reduce_dim,
+                                                 scaling_shape=weight_scaling_shape,
+                                                 bit_width_impl_type=weight_bit_width_impl_type,
+                                                 bit_width_impl_override=weight_bit_width_impl_override,
+                                                 restrict_bit_width_type=weight_restrict_bit_width_type,
+                                                 min_overall_bit_width=weight_min_overall_bit_width,
+                                                 max_overall_bit_width=weight_max_overall_bit_width,
+                                                 tracked_parameter_list_init=self.weight,
+                                                 ternary_threshold=weight_ternary_threshold,
+                                                 scaling_stats_input_view_shape_impl=weight_stats_input_view_shape_impl,
+                                                 scaling_stats_input_concat_dim=weight_scaling_stats_input_concat_dim,
+                                                 scaling_stats_sigma=weight_scaling_stats_sigma,
+                                                 scaling_min_val=weight_scaling_min_val,
+                                                 override_pretrained_bit_width=weight_override_pretrained_bit_width)
+
 
 
         return self.state
@@ -221,11 +298,19 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
             1./(1-self.alphas), requires_grad=False)
 
     def forward(self, input):
+        input, input_scale, input_bit_width = self.unpack_input(input)
+
+        # input: input tensor of shape (minibatch x in_channels x iH x iW)
+        # weight: filters of shape (out_channels x (in_channels / groups) x kH x kW)
+        if not (input.shape[0] == self.state.eps0.shape[0] == self.state.eps1.shape[0]):
+            logging.warning("Batch size changed from {} to {} since last iteration. Reallocating states."
+                            .format(self.state.eps0.shape[0], input.shape[0]))
+            self.init_state(input.shape[0], input.shape[2:4])
+
         output_scale = None
         output_bit_width = None
         quant_bias_bit_width = None
 
-        input, input_scale, input_bit_width = self.unpack_input(input)
         quant_weight, quant_weight_scale, quant_weight_bit_width = self.weight_quant(self.weight)
         quant_weight = self.weight_reg(quant_weight)
 
@@ -236,13 +321,6 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
             assert input_scale is not None
             output_scale = input_scale * quant_weight_scale
             
-        # input: input tensor of shape (minibatch x in_channels x iH x iW)
-        # weight: filters of shape (out_channels x (in_channels / groups) x kH x kW)
-        if not (input.shape[0] == self.state.eps0.shape[0] == self.state.eps1.shape[0]):
-            logging.warning("Batch size changed from {} to {} since last iteration. Reallocating states."
-                            .format(self.state.eps0.shape[0], input.shape[0]))
-            self.init_state(input.shape[0], input.shape[2:4])
-
         eps0 = input * self.tau_s__dt + self.alphas * self.state.eps0
         eps1 = self.alpha * self.state.eps1 + eps0 * self.tau_m__dt
         pvmem = F.conv2d(eps1, quant_weight, self.bias, self.stride,
