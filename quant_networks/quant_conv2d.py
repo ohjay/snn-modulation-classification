@@ -74,7 +74,7 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
         bias_narrow_range = False
         bias_bit_width = None
         weight_quant_override = None
-        weight_quant_type = QuantType.FP
+        weight_quant_type = QuantType.INT
         weight_narrow_range = False
         weight_scaling_override = None
         weight_bit_width_impl_override = None
@@ -208,7 +208,7 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
         bias_narrow_range = False
         bias_bit_width = None
         weight_quant_override = None
-        weight_quant_type = QuantType.FP
+        weight_quant_type = QuantType.INT
         weight_narrow_range = False
         weight_scaling_override = None
         weight_bit_width_impl_override = None
