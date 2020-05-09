@@ -27,6 +27,8 @@ def parse_args():
                         metavar='S', help='path to YAML file describing net architecture')
     parser.add_argument('--ref_network_spec', type=str, default='networks/radio_ml_conv_ref.yaml',
                         metavar='S', help='path to YAML file describing reference net architecture')
+    parser.add_argument('--just_ref', action='store_true',
+                        help='whether we want to just train the reference network')
     parser.add_argument('--I_resolution', type=int, default=128,
                         metavar='N', help='size of I dimension (used when representing I/Q plane as image)')
     parser.add_argument('--Q_resolution', type=int, default=128,
@@ -95,6 +97,7 @@ if __name__ == '__main__':
 
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
     log_dir = os.path.join('runs', args.data, current_time)
+    writer = SummaryWriter(log_dir=log_dir, comment='%s Conv' % args.data)
     print('log dir: {log_dir}'.format(log_dir=log_dir))
     out_dir = os.path.join(args.output, args.data, current_time)
     os.makedirs(out_dir)
@@ -146,38 +149,42 @@ if __name__ == '__main__':
     # number of test samples: n_test * batch_size_test
     n_test = np.ceil(float(args.n_test_samples) /
                      args.batch_size_test).astype(int)
+    n_tests_total = np.ceil(float(args.n_steps) /
+                            args.n_test_interval).astype(int)
 
     opt = getattr(torch.optim, args.optim_type)
     opt_param = {'betas': [0.0, args.beta]}
     ref_opt_param = {'lr': args.ref_lr, 'betas': [0.0, args.beta]}
     loss = getattr(torch.nn, args.loss_type)
 
-    burnin = args.burnin
-    convs = load_network_spec(args.network_spec)
-    net = ConvNetwork(args, im_dims, args.batch_size, convs, target_size,
-                      act=torch.nn.Sigmoid(), loss=loss, opt=opt, opt_param=opt_param,
-                      learning_rates=args.learning_rates, burnin=burnin)
+    if not args.just_ref:
+        burnin = args.burnin
+        convs = load_network_spec(args.network_spec)
+        net = ConvNetwork(args, im_dims, args.batch_size, convs, target_size,
+                          act=torch.nn.Sigmoid(), loss=loss, opt=opt, opt_param=opt_param,
+                          learning_rates=args.learning_rates, burnin=burnin)
 
-    if args.restore_path:
-        print('-' * 80)
-        if not os.path.isfile(args.restore_path):
-            print('ERROR: Cannot load `%s`.' % args.restore_path)
-            print('File does not exist! Aborting load...')
-        else:
-            state_dict = torch.load(args.restore_path)
-            net.load_state_dict(state_dict)
-            print('Loaded the SNN model from `%s`.' % args.restore_path)
-        print('-' * 80)
+        if args.restore_path:
+            print('-' * 80)
+            if not os.path.isfile(args.restore_path):
+                print('ERROR: Cannot load `%s`.' % args.restore_path)
+                print('File does not exist! Aborting load...')
+            else:
+                state_dict = torch.load(args.restore_path)
+                net.load_state_dict(state_dict)
+                print('Loaded the SNN model from `%s`.' % args.restore_path)
+            print('-' * 80)
 
-    net = net.to(device)
-    net.reset(True)
+        net = net.to(device)
+        net.reset(True)
+        acc_test = np.empty([n_tests_total, n_test, len(net.dcll_slices)])
+
+        dumper = NetworkDumper(writer, net)
 
     ref_convs = load_network_spec(args.ref_network_spec)
     ref_net = ReferenceConvNetwork(args, ref_im_dims, ref_convs, loss, opt, ref_opt_param, target_size)
     ref_net = ref_net.to(device)
-
-    writer = SummaryWriter(log_dir=log_dir, comment='%s Conv' % args.data)
-    dumper = NetworkDumper(writer, net)
+    acc_test_ref = np.empty([n_tests_total, n_test])
 
     if not args.no_save:
         annotate(out_dir, text=log_dir, filename='log_dir.txt')
@@ -185,11 +192,6 @@ if __name__ == '__main__':
         with open(os.path.join(out_dir, 'args.pkl'), 'wb') as fp:
             pickle.dump(vars(args), fp)
         save_source(out_dir)
-
-    n_tests_total = np.ceil(float(args.n_steps) /
-                            args.n_test_interval).astype(int)
-    acc_test = np.empty([n_tests_total, n_test, len(net.dcll_slices)])
-    acc_test_ref = np.empty([n_tests_total, n_test])
 
     train_data = get_loader(args.batch_size, train=True, taskid=0, **get_loader_kwargs)
     gen_train = iter(train_data)
@@ -201,9 +203,10 @@ if __name__ == '__main__':
 
     for step in range(args.n_steps):
         if ((step + 1) % 1000) == 0:
-            for i in range(len(net.dcll_slices)):
-                net.dcll_slices[i].optimizer.param_groups[-1]['lr'] /= 2
-            net.dcll_slices[-1].optimizer2.param_groups[-1]['lr'] /= 2
+            if not args.just_ref:
+                for i in range(len(net.dcll_slices)):
+                    net.dcll_slices[i].optimizer.param_groups[-1]['lr'] /= 2
+                net.dcll_slices[-1].optimizer2.param_groups[-1]['lr'] /= 2
             ref_net.optim.param_groups[-1]['lr'] /= 2
             print('Adjusting learning rates')
 
@@ -214,20 +217,21 @@ if __name__ == '__main__':
             input, labels = next(gen_train)
         labels = to_one_hot(labels, target_size)
 
-        input_spikes, labels_spikes = to_spike_train(input, labels,
-                                                     **to_st_train_kwargs)
-        input_spikes = torch.Tensor(input_spikes).to(device)
-        labels_spikes = torch.Tensor(labels_spikes).to(device)
+        if not args.just_ref:
+            input_spikes, labels_spikes = to_spike_train(input, labels,
+                                                         **to_st_train_kwargs)
+            input_spikes = torch.Tensor(input_spikes).to(device)
+            labels_spikes = torch.Tensor(labels_spikes).to(device)
+
+            # Train
+            net.reset()
+            net.train()
+            for sim_iteration in range(n_iters):
+                net.learn(x=input_spikes[sim_iteration],
+                          labels=labels_spikes[sim_iteration])
 
         ref_input = torch.Tensor(input).to(device).reshape(-1, *ref_im_dims)
         ref_label = torch.Tensor(labels).to(device)
-
-        # Train
-        net.reset()
-        net.train()
-        for sim_iteration in range(n_iters):
-            net.learn(x=input_spikes[sim_iteration],
-                      labels=labels_spikes[sim_iteration])
 
         ref_net.train()
         ref_net.learn(x=ref_input, labels=ref_label)
@@ -236,35 +240,37 @@ if __name__ == '__main__':
         if (step % args.n_test_interval) == 0:
             test_idx = step // args.n_test_interval
             for i, test_data in enumerate(all_test_data):
-                test_input, test_labels = to_spike_train(*test_data,
-                                                         **to_st_test_kwargs)
-                try:
-                    test_input = torch.Tensor(test_input).to(device)
-                except RuntimeError as e:
-                    print('Exception: ' + str(e) +
-                          '. Try to decrease your batch_size_test with the --batch_size_test argument.')
-                    raise
+                if not args.just_ref:
+                    test_input, test_labels = to_spike_train(*test_data,
+                                                             **to_st_test_kwargs)
+                    try:
+                        test_input = torch.Tensor(test_input).to(device)
+                    except RuntimeError as e:
+                        print('Exception: ' + str(e) +
+                              '. Try to decrease your batch_size_test with the --batch_size_test argument.')
+                        raise
+                    test_labels1h = torch.Tensor(test_labels).to(device)
 
-                test_labels1h = torch.Tensor(test_labels).to(device)
+                    net.reset()
+                    net.eval()
+                    for sim_iteration in range(n_iters_test):
+                        net.test(x=test_input[sim_iteration])
+                    acc_test[test_idx, i, :] = net.accuracy(test_labels1h)
+
+                    if i == 0:
+                        net.write_stats(writer, step, comment='_batch_'+str(i))
+
                 test_ref_input = torch.Tensor(test_data[0]).to(device).reshape(-1, *ref_im_dims)
                 test_ref_label = torch.Tensor(test_data[1]).to(device)
 
-                net.reset()
-                net.eval()
-                for sim_iteration in range(n_iters_test):
-                    net.test(x=test_input[sim_iteration])
-
                 ref_net.eval()
                 ref_net.test(test_ref_input)
-
-                acc_test[test_idx, i, :] = net.accuracy(test_labels1h)
                 acc_test_ref[test_idx, i] = ref_net.accuracy(test_ref_label)
 
                 if i == 0:
-                    net.write_stats(writer, step, comment='_batch_'+str(i))
                     ref_net.write_stats(writer, step)
 
-            if not args.no_save:
+            if not args.just_ref and not args.no_save:
                 np.save(os.path.join(out_dir, 'acc_test.npy'), acc_test)
                 np.save(os.path.join(out_dir, 'acc_test_ref.npy'), acc_test_ref)
 
@@ -276,7 +282,10 @@ if __name__ == '__main__':
                 print('Saved network parameters to `%s`.' % save_path)
                 print('-' * 80)
 
-            acc = np.mean(acc_test[test_idx], axis=0)
+            if not args.just_ref:
+                acc = np.mean(acc_test[test_idx], axis=0)
+            else:
+                acc = 'N/A'
             acc_ref = np.mean(acc_test_ref[test_idx], axis=0)
             step_str = str(step).zfill(5)
             print('Step {} \t Accuracy {} \t Ref {}'.format(step_str, acc, acc_ref))
