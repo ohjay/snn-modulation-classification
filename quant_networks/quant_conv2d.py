@@ -19,7 +19,6 @@ from brevitas.core.stats import StatsInputViewShapeImpl, StatsOp
 from brevitas.function.ops import max_uint
 from brevitas.function.ops_ste import ceil_ste
 from brevitas.proxy.parameter_quant import WeightQuantProxy, BiasQuantProxy, WeightReg
-from brevitas.proxy.runtime_quant import ClampQuantProxy
 from brevitas.utils.python_utils import AutoName
 from brevitas.nn.quant_bn import mul_add_from_bn
 from brevitas.nn.quant_layer import QuantLayer, SCALING_MIN_VAL
@@ -70,13 +69,13 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
         bias_narrow_range = False
         bias_bit_width = None
         weight_quant_override = None
-        weight_quant_type = QuantType.FP
+        weight_quant_type = QuantType.INT
         weight_narrow_range = False
         weight_scaling_override = None
         weight_bit_width_impl_override = None
         weight_bit_width_impl_type = BitWidthImplType.CONST
         weight_restrict_bit_width_type = RestrictValueType.INT
-        weight_bit_width = 8
+        weight_bit_width = 4
         weight_min_overall_bit_width = 2
         weight_max_overall_bit_width = None
         weight_scaling_impl_type = ScalingImplType.STATS
@@ -141,18 +140,6 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
                                                  scaling_stats_sigma=weight_scaling_stats_sigma,
                                                  scaling_min_val=weight_scaling_min_val,
                                                  override_pretrained_bit_width=weight_override_pretrained_bit_width)
-
-        # Use default values from brevitas.nn.quant_accumulator ClampQuantAccumulator
-        self.state_quant = ClampQuantProxy(signed=True,
-                                           narrow_range=True,
-                                           quant_type=QuantType.INT,
-                                           ms_bit_width_to_clamp=0,
-                                           min_overall_bit_width=2,
-                                           max_overall_bit_width=32,
-                                           msb_clamp_bit_width_impl_type=BitWidthImplType.CONST,
-                                           clamp_at_least_init_val=False,
-                                           override_pretrained_bit_width=False)
- 
         self.bias_quant = BiasQuantProxy(quant_type=bias_quant_type,
                                          bit_width=bias_bit_width,
                                          narrow_range=bias_narrow_range)        
