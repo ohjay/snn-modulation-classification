@@ -24,6 +24,7 @@ from brevitas.nn.quant_bn import mul_add_from_bn
 from brevitas.nn.quant_layer import QuantLayer, SCALING_MIN_VAL
 from brevitas.config import docstrings
 
+
 class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
     NeuronState = namedtuple('NeuronState', ('eps0', 'eps1'))
 
@@ -259,6 +260,80 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
     def init_prev(self, batch_size, im_dims):
         return torch.zeros(batch_size, self.in_channels, im_dims[0], im_dims[1])
 
+class QuantContinuousConv2DState(QuantContinuousConv2D):
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride=1,
+                 padding=2,
+                 dilation=1,
+                 groups=1,
+                 bias=True,
+                 alpha=.95,
+                 alphas=.9,
+                 act=nn.Sigmoid(),
+                 random_tau=False,
+                 spiking=True,
+                 weight_bit_width=8,
+                 **kwargs):
+        QuantContinuousConv2D.__init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride=1,
+                 padding=2,
+                 dilation=1,
+                 groups=1,
+                 bias=True,
+                 alpha=.95,
+                 alphas=.9,
+                 act=nn.Sigmoid(),
+                 random_tau=False,
+                 spiking=True,
+                 weight_bit_width=8,
+                 **kwargs)
+
+    def forward(self, input):
+        output_scale = None
+        output_bit_width = None
+        quant_bias_bit_width = None
+
+        input, input_scale, input_bit_width = self.unpack_input(input)
+        quant_weight, quant_weight_scale, quant_weight_bit_width = self.weight_quant(self.weight)
+        quant_weight = self.weight_reg(quant_weight)
+
+        if self.compute_output_bit_width:
+            assert input_bit_width is not None
+            output_bit_width = self.max_output_bit_width(input_bit_width, quant_weight_bit_width)
+        if self.compute_output_scale:
+            assert input_scale is not None
+            output_scale = input_scale * quant_weight_scale
+            
+        # input: input tensor of shape (minibatch x in_channels x iH x iW)
+        # weight: filters of shape (out_channels x (in_channels / groups) x kH x kW)
+        if not (input.shape[0] == self.state.eps0.shape[0] == self.state.eps1.shape[0]):
+            logging.warning("Batch size changed from {} to {} since last iteration. Reallocating states."
+                            .format(self.state.eps0.shape[0], input.shape[0]))
+            self.init_state(input.shape[0], input.shape[2:4])
+
+        eps0 = input * self.tau_s__dt + self.alphas * self.state.eps0
+        eps1 = self.alpha * self.state.eps1 + eps0 * self.tau_m__dt
+        pvmem = F.conv2d(eps1, quant_weight, self.bias, self.stride,
+                         self.padding, self.dilation, self.groups)
+        pv = self.act(pvmem)
+        output = self.output_act(pvmem)
+
+        # best
+        #arp = .65*self.state.arp + output*10
+        self.state = self.NeuronState(eps0=eps0.detach(),
+                                      eps1=eps1.detach())
+        return output, pv, pvmem
+
+
+
+
+
 
 class QuantContinuousRelativeRefractoryConv2D(QuantContinuousConv2D):
     NeuronState = namedtuple('NeuronState', ('eps0', 'eps1', 'arp'))
@@ -361,7 +436,8 @@ class QuantConv2dDCLLlayer(nn.Module):
                  spiking=True,
                  random_tau=False,
                  output_layer=False,
-                 weight_bit_width=8):
+                 weight_bit_width=8,
+                 forward_state_quantized=False):
 
         super(QuantConv2dDCLLlayer, self).__init__()
         self.im_dims = im_dims
@@ -391,7 +467,11 @@ class QuantConv2dDCLLlayer(nn.Module):
             self.i2h = QuantContinuousRelativeRefractoryConv2D(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
                                                           stride=stride, alpha=alpha, alphas=alphas, alpharp=alpharp, wrp=wrp, act=act, random_tau=random_tau)
         else:
-            self.i2h = QuantContinuousConv2D(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
+            if forward_state_quantized:
+                self.i2h = QuantContinuousConv2DState(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
+                                        stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau, weight_bit_width=weight_bit_width)
+            else:
+                self.i2h = QuantContinuousConv2D(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
                                         stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau, weight_bit_width=weight_bit_width)
         conv_shape = self.i2h.get_output_shape(self.im_dims)
         print('Quant Conv2D Layer ', self.im_dims, conv_shape, self.in_channels,
