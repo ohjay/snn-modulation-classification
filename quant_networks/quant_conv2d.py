@@ -293,6 +293,10 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
                  spiking=True,
                  weight_bit_width=8,
                  **kwargs)
+        self.eps0_max = float('-inf')
+        self.eps0_min = float('inf')
+        self.eps1_min = float('inf')
+        self.eps1_max = float('-inf')
 
     def forward(self, input):
         output_scale = None
@@ -323,6 +327,19 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
                          self.padding, self.dilation, self.groups)
         pv = self.act(pvmem)
         output = self.output_act(pvmem)
+
+
+        # Update state maximum
+        eps0_max = torch.max(self.state.eps0).item()
+        eps0_min = torch.min(self.state.eps0).item()
+        self.eps0_max = max(self.eps0_max, eps0_max)
+        self.eps0_min = min(self.eps0_min, eps0_min)
+
+        eps1_max = torch.max(self.state.eps1).item()
+        eps1_min = torch.min(self.state.eps1).item()
+        self.eps1_max = max(self.eps1_max, eps1_max)
+        self.eps1_min = min(self.eps1_min, eps1_min)
+
 
         # best
         #arp = .65*self.state.arp + output*10

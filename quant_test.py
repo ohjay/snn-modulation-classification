@@ -84,6 +84,8 @@ def parse_args():
                         help='folder name for the results')
     parser.add_argument('--weight_bit_width', type=int, default='8',
                         help='Bit width for quantization of DCLL layer weights')
+    parser.add_argument('--forward_state_quantized', type=bool, default=False,
+                        help='Switch network to different forward path (not for training) with quantized internal state')
     return parser.parse_args()
 
 
