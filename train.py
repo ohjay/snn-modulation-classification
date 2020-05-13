@@ -59,7 +59,7 @@ def parse_args():
                         help='for how many ms do we present a sample during classification')
     parser.add_argument('--n_iters_test', type=int, default=1024, metavar='N',
                         help='for how many ms do we present a sample during classification')
-    parser.add_argument('--optim_type', type=str, default='Adamax',
+    parser.add_argument('--optim_type', type=str, default='Adam',
                         metavar='S', help='which optimizer to use')
     parser.add_argument('--loss_type', type=str, default='SmoothL1Loss',
                         metavar='S', help='which loss function to use')

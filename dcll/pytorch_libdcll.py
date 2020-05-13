@@ -556,11 +556,11 @@ class Conv2dDCLLlayer(nn.Module):
         self.i2o = nn.Linear(np.prod(self.get_flat_size()),
                              target_size, bias=True)
         self.i2o.weight.requires_grad = False
+        self.i2o.bias.requires_grad = False
         if lc_dropout is not False:
             self.dropout = torch.nn.Dropout(p=lc_dropout)
         else:
             self.dropout = lambda x: x
-        self.i2o.bias.requires_grad = False
 
         if output_layer:
             self.output_ = nn.Linear(
