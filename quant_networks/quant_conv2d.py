@@ -224,6 +224,9 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
             1./(1-self.alphas), requires_grad=False)
 
     def forward(self, input):
+        # input: input tensor of shape (minibatch x in_channels x iH x iW)
+        # weight: filters of shape (out_channels x (in_channels / groups) x kH x kW)
+
         output_scale = None
         output_bit_width = None
         quant_bias_bit_width = None
@@ -239,8 +242,6 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
             assert input_scale is not None
             output_scale = input_scale * quant_weight_scale
             
-        # input: input tensor of shape (minibatch x in_channels x iH x iW)
-        # weight: filters of shape (out_channels x (in_channels / groups) x kH x kW)
         if not (input.shape[0] == self.state.eps0.shape[0] == self.state.eps1.shape[0]):
             logging.warning("Batch size changed from {} to {} since last iteration. Reallocating states."
                             .format(self.state.eps0.shape[0], input.shape[0]))
@@ -357,6 +358,9 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
 
 
     def forward(self, input):
+        # input: input tensor of shape (minibatch x in_channels x iH x iW)
+        # weight: filters of shape (out_channels x (in_channels / groups) x kH x kW)
+
         output_scale = None
         output_bit_width = None
         quant_bias_bit_width = None
@@ -373,30 +377,19 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
             assert input_scale is not None
             output_scale = input_scale * quant_weight_scale
             
-        # input: input tensor of shape (minibatch x in_channels x iH x iW)
-        # weight: filters of shape (out_channels x (in_channels / groups) x kH x kW)
         if not (input.shape[0] == self.state.eps0.shape[0] == self.state.eps1.shape[0]):
             logging.warning("Batch size changed from {} to {} since last iteration. Reallocating states."
                             .format(self.state.eps0.shape[0], input.shape[0]))
             self.init_state(input.shape[0], input.shape[2:4])
 
-        eps0 = self.eps0_quant_identity(input * self.tau_s__dt + self.alphas * self.state.eps0)
-        eps1 = self.state.eps1
+        #eps0 = self.eps0_quant_identity(input * self.tau_s__dt + self.alphas * self.state.eps0)
         #eps1 = self.eps1_quant_identity(self.alpha * self.state.eps1 + eps0 * self.tau_m__dt)
-        #eps0 = input * self.tau_s__dt + self.alphas * self.state.eps0
-        #eps1 = self.alpha * self.state.eps1 + eps0 * self.tau_m__dt
+        eps0 = input * self.tau_s__dt + self.alphas * self.state.eps0
+        eps1 = self.alpha * self.state.eps1 + eps0 * self.tau_m__dt
         pvmem = F.conv2d(eps1, quant_weight, self.bias, self.stride,
                          self.padding, self.dilation, self.groups)
         pv = self.act(pvmem)
         output = self.output_act(pvmem)
-
-        #output = torch.zeros(output.shape)
-
-        #for i in range(output.shape[0]):
-        #    for j in range(output.shape[1]):
-        #        for k in range(output.shape[2]):
-        #            for l in range(output.shape[3]):
-        #                output[i][j][k][l] = 0
 
         # Update state maximum
         eps0_max = torch.max(self.state.eps0).item()
@@ -418,8 +411,6 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
         self.pv_max = max(self.pv_max, pv_max)
         pv_min = torch.min(pv).item()
         self.pv_min = min(self.pv_min, pv_min)
-
-
 
         # best
         #arp = .65*self.state.arp + output*10
