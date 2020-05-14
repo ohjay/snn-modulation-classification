@@ -23,6 +23,10 @@ def parse_args():
                         metavar='N', help='minimum SNR (inclusive) to use during data loading')
     parser.add_argument('--max_snr', type=int, default=30,
                         metavar='N', help='maximum SNR (inclusive) to use during data loading')
+    parser.add_argument('--per_h5_frac', type=float, default=0.5,
+                        metavar='N', help='fraction of each HDF5 data file to use')
+    parser.add_argument('--train_frac', type=float, default=0.9,
+                        metavar='N', help='train split (1-TRAIN_FRAC is the test split)')
     parser.add_argument('--network_spec', type=str, default='networks/radio_ml_conv.yaml',
                         metavar='S', help='path to YAML file describing net architecture')
     parser.add_argument('--ref_network_spec', type=str, default='networks/radio_ml_conv_ref.yaml',
@@ -135,6 +139,8 @@ if __name__ == '__main__':
         get_loader_kwargs['data_dir'] = args.radio_ml_data_dir
         get_loader_kwargs['min_snr'] = args.min_snr
         get_loader_kwargs['max_snr'] = args.max_snr
+        get_loader_kwargs['per_h5_frac'] = args.per_h5_frac
+        get_loader_kwargs['train_frac'] = args.train_frac
         # Set "to spike train" kwargs
         for to_st_kwargs in (to_st_train_kwargs, to_st_test_kwargs):
             to_st_kwargs['out_w'] = args.I_resolution
