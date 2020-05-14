@@ -19,10 +19,12 @@ from brevitas.core.stats import StatsInputViewShapeImpl, StatsOp
 from brevitas.function.ops import max_uint
 from brevitas.function.ops_ste import ceil_ste
 from brevitas.proxy.parameter_quant import WeightQuantProxy, BiasQuantProxy, WeightReg
+from brevitas.nn.quant_activation import QuantIdentity
 from brevitas.utils.python_utils import AutoName
 from brevitas.nn.quant_bn import mul_add_from_bn
 from brevitas.nn.quant_layer import QuantLayer, SCALING_MIN_VAL
 from brevitas.config import docstrings
+from brevitas.core.restrict_val import FloatToIntImplType
 
 
 class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
@@ -298,6 +300,62 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
         self.eps1_min = float('inf')
         self.eps1_max = float('-inf')
 
+        self.pvmem_max = float('-inf')
+        self.pvmem_min = float('inf')
+        self.pv_max = float('-inf')
+        self.pv_min = float('inf')
+
+
+        self.eps0_quant_identity = QuantIdentity(bit_width = 8,
+                 min_val = 0,
+                 max_val = 100,
+                 narrow_range = False,
+                 quant_type = QuantType.FP,
+                 float_to_int_impl_type = FloatToIntImplType.ROUND,
+                 scaling_impl_type = ScalingImplType.PARAMETER,
+                 scaling_override = None,
+                 scaling_per_channel = False,
+                 scaling_stats_sigma = 3.0,
+                 scaling_stats_op = StatsOp.MEAN_LEARN_SIGMA_STD,
+                 scaling_stats_buffer_momentum = 0.1,
+                 scaling_stats_permute_dims = (1, 0, 2, 3),
+                 per_channel_broadcastable_shape = None,
+                 min_overall_bit_width = 2,
+                 max_overall_bit_width = None,
+                 bit_width_impl_override = None,
+                 bit_width_impl_type = BitWidthImplType.CONST,
+                 restrict_bit_width_type = RestrictValueType.INT,
+                 restrict_scaling_type = RestrictValueType.LOG_FP,
+                 scaling_min_val = SCALING_MIN_VAL,
+                 override_pretrained_bit_width = False,
+                 return_quant_tensor = False)
+
+        self.eps1_quant_identity = QuantIdentity(bit_width = 16,
+                 min_val = 0,
+                 max_val = 20000,
+                 narrow_range = False,
+                 quant_type = QuantType.FP,
+                 float_to_int_impl_type = FloatToIntImplType.ROUND,
+                 scaling_impl_type = ScalingImplType.PARAMETER,
+                 scaling_override = None,
+                 scaling_per_channel = False,
+                 scaling_stats_sigma = 3.0,
+                 scaling_stats_op = StatsOp.MEAN_LEARN_SIGMA_STD,
+                 scaling_stats_buffer_momentum = 0.1,
+                 scaling_stats_permute_dims = (1, 0, 2, 3),
+                 per_channel_broadcastable_shape = None,
+                 min_overall_bit_width = 2,
+                 max_overall_bit_width = None,
+                 bit_width_impl_override = None,
+                 bit_width_impl_type = BitWidthImplType.CONST,
+                 restrict_bit_width_type = RestrictValueType.INT,
+                 restrict_scaling_type = RestrictValueType.LOG_FP,
+                 scaling_min_val = SCALING_MIN_VAL,
+                 override_pretrained_bit_width = False,
+                 return_quant_tensor = False)
+
+
+
     def forward(self, input):
         output_scale = None
         output_bit_width = None
@@ -321,6 +379,8 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
                             .format(self.state.eps0.shape[0], input.shape[0]))
             self.init_state(input.shape[0], input.shape[2:4])
 
+        #eps0 = self.eps0_quant_identity(input * self.tau_s__dt + self.alphas * self.state.eps0)
+        #eps1 = self.eps1_quant_identity(self.alpha * self.state.eps1 + eps0 * self.tau_m__dt)
         eps0 = input * self.tau_s__dt + self.alphas * self.state.eps0
         eps1 = self.alpha * self.state.eps1 + eps0 * self.tau_m__dt
         pvmem = F.conv2d(eps1, quant_weight, self.bias, self.stride,
@@ -339,6 +399,17 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
         eps1_min = torch.min(self.state.eps1).item()
         self.eps1_max = max(self.eps1_max, eps1_max)
         self.eps1_min = min(self.eps1_min, eps1_min)
+
+        pvmem_max = torch.max(pvmem).item()
+        self.pvmem_max = max(self.pvmem_max, pvmem_max)
+        pvmem_min = torch.min(pvmem).item()
+        self.pvmem_min = min(self.pvmem_min, pvmem_min)
+
+        pv_max = torch.max(pv).item()
+        self.pv_max = max(self.pv_max, pv_max)
+        pv_min = torch.min(pv).item()
+        self.pv_min = min(self.pv_min, pv_min)
+
 
 
         # best
