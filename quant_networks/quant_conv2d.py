@@ -368,7 +368,6 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
         input, input_scale, input_bit_width = self.unpack_input(input)
         quant_weight, quant_weight_scale, quant_weight_bit_width = self.weight_quant(self.weight)
         quant_weight = self.weight_reg(quant_weight)
-        quant_weight = -quant_weight
 
         if self.compute_output_bit_width:
             assert input_bit_width is not None
