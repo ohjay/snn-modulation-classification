@@ -91,6 +91,7 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
+    print("args.forward_state_quantized " + str(args.forward_state_quantized))
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
