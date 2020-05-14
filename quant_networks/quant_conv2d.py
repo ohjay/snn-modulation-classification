@@ -311,7 +311,7 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
         print("[QuantContinuousConv2DState] eps0_bit_width = " + str(eps0_bit_width))
         print("[QuantContinuousConv2DState] eps1_bit_width = " + str(eps1_bit_width))
 
-        self.eps0_quant_identity = QuantIdentity(bit_width = 8,
+        self.eps0_quant_identity = QuantIdentity(bit_width = eps0_bit_width,
                  min_val = 0,
                  max_val = 100,
                  narrow_range = False,
@@ -335,7 +335,7 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
                  override_pretrained_bit_width = False,
                  return_quant_tensor = False)
 
-        self.eps1_quant_identity = QuantIdentity(bit_width = 16,
+        self.eps1_quant_identity = QuantIdentity(bit_width = eps1_bit_width,
                  min_val = 0,
                  max_val = 20000,
                  narrow_range = False,
