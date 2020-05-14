@@ -307,7 +307,7 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
         self.pv_min = float('inf')
 
 
-        self.eps0_quant_identity = QuantIdentity(bit_width = 4,
+        self.eps0_quant_identity = QuantIdentity(bit_width = 16,
                  min_val = 0,
                  max_val = 100,
                  narrow_range = False,
@@ -331,7 +331,7 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
                  override_pretrained_bit_width = False,
                  return_quant_tensor = False)
 
-        self.eps1_quant_identity = QuantIdentity(bit_width = 4,
+        self.eps1_quant_identity = QuantIdentity(bit_width = 8,
                  min_val = 0,
                  max_val = 20000,
                  narrow_range = False,
@@ -381,10 +381,10 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
                             .format(self.state.eps0.shape[0], input.shape[0]))
             self.init_state(input.shape[0], input.shape[2:4])
 
-        #eps0 = self.eps0_quant_identity(input * self.tau_s__dt + self.alphas * self.state.eps0)
-        #eps1 = self.eps1_quant_identity(self.alpha * self.state.eps1 + eps0 * self.tau_m__dt)
-        eps0 = input * self.tau_s__dt + self.alphas * self.state.eps0
-        eps1 = self.alpha * self.state.eps1 + eps0 * self.tau_m__dt
+        eps0 = self.eps0_quant_identity(input * self.tau_s__dt + self.alphas * self.state.eps0)
+        eps1 = self.eps1_quant_identity(self.alpha * self.state.eps1 + eps0 * self.tau_m__dt)
+        #eps0 = input * self.tau_s__dt + self.alphas * self.state.eps0
+        #eps1 = self.alpha * self.state.eps1 + eps0 * self.tau_m__dt
         pvmem = F.conv2d(eps1, quant_weight, self.bias, self.stride,
                          self.padding, self.dilation, self.groups)
         pv = self.act(pvmem)
