@@ -307,13 +307,13 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
         self.pv_min = float('inf')
 
 
-        self.eps0_quant_identity = QuantIdentity(bit_width = 16,
+        self.eps0_quant_identity = QuantIdentity(bit_width = 8,
                  min_val = 0,
                  max_val = 100,
                  narrow_range = False,
-                 quant_type = QuantType.FP,
+                 quant_type = QuantType.INT,
                  float_to_int_impl_type = FloatToIntImplType.ROUND,
-                 scaling_impl_type = ScalingImplType.PARAMETER,
+                 scaling_impl_type = ScalingImplType.CONST,
                  scaling_override = None,
                  scaling_per_channel = False,
                  scaling_stats_sigma = 3.0,
@@ -331,13 +331,13 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
                  override_pretrained_bit_width = False,
                  return_quant_tensor = False)
 
-        self.eps1_quant_identity = QuantIdentity(bit_width = 8,
+        self.eps1_quant_identity = QuantIdentity(bit_width = 16,
                  min_val = 0,
                  max_val = 20000,
                  narrow_range = False,
-                 quant_type = QuantType.FP,
+                 quant_type = QuantType.INT,
                  float_to_int_impl_type = FloatToIntImplType.ROUND,
-                 scaling_impl_type = ScalingImplType.PARAMETER,
+                 scaling_impl_type = ScalingImplType.CONST,
                  scaling_override = None,
                  scaling_per_channel = False,
                  scaling_stats_sigma = 3.0,
