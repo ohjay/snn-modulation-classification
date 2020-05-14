@@ -12,6 +12,8 @@ batch_size_test=512
 n_test_samples=1024
 
 weight_bit_width=8
+eps0_bit_width=8
+eps1_bit_width=16
 
 python -u quant_test.py \
     --data $data \
@@ -21,5 +23,7 @@ python -u quant_test.py \
     --batch_size_test $batch_size_test \
     --n_test_samples $n_test_samples \
     --weight_bit_width $weight_bit_width \
+    --eps0_bit_width $eps0_bit_width \
+    --eps1_bit_width $eps1_bit_width \
     --restore_path $restore_path \
     --forward_state_quantized $forward_state_quantized

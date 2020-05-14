@@ -279,6 +279,8 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
                  random_tau=False,
                  spiking=True,
                  weight_bit_width=8,
+                 eps0_bit_width=8,
+                 eps1_bit_width=16,
                  **kwargs):
         QuantContinuousConv2D.__init__(self,
                  in_channels,
@@ -306,6 +308,8 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
         self.pv_max = float('-inf')
         self.pv_min = float('inf')
 
+        print("[QuantContinuousConv2DState] eps0_bit_width = " + str(eps0_bit_width))
+        print("[QuantContinuousConv2DState] eps1_bit_width = " + str(eps1_bit_width))
 
         self.eps0_quant_identity = QuantIdentity(bit_width = 8,
                  min_val = 0,
@@ -524,6 +528,8 @@ class QuantConv2dDCLLlayer(nn.Module):
                  random_tau=False,
                  output_layer=False,
                  weight_bit_width=8,
+                 eps0_bit_width=8,
+                 eps1_bit_width=16,
                  forward_state_quantized=False):
 
         super(QuantConv2dDCLLlayer, self).__init__()
@@ -555,11 +561,11 @@ class QuantConv2dDCLLlayer(nn.Module):
                                                           stride=stride, alpha=alpha, alphas=alphas, alpharp=alpharp, wrp=wrp, act=act, random_tau=random_tau)
         else:
             if forward_state_quantized:
-                print("[USE QuantContinuousConv2DState")
+                print("[Use QuantContinuousConv2DState")
                 self.i2h = QuantContinuousConv2DState(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
-                                        stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau, weight_bit_width=weight_bit_width)
+                                        stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau, weight_bit_width=weight_bit_width, eps0_bit_width=eps0_bit_width, eps1_bit_width=eps1_bit_width)
             else:
-                print("[USE QuantContinuousConv2D")
+                print("[Use QuantContinuousConv2D")
                 self.i2h = QuantContinuousConv2D(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
                                         stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau, weight_bit_width=weight_bit_width)
         conv_shape = self.i2h.get_output_shape(self.im_dims)

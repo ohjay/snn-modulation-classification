@@ -132,6 +132,8 @@ class QuantConvNetwork(torch.nn.Module):
                                     lc_dropout=.5,
                                     output_layer=is_output_layer,
                                     weight_bit_width=args.weight_bit_width,
+                                    eps0_bit_width=args.eps0_bit_width,
+                                    eps1_bit_width=args.eps1_bit_width,
                                     forward_state_quantized=args.forward_state_quantized
                                     ).to(device).init_hiddens(batch_size)
             return layer, torch.Size([layer.out_channels]) + layer.output_shape
