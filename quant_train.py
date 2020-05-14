@@ -84,6 +84,12 @@ def parse_args():
                         help='folder name for the results')
     parser.add_argument('--weight_bit_width', type=int, default='8',
                         help='Bit width for quantization of DCLL layer weights')
+    parser.add_argument('--eps0_bit_width', type=int, default='8',
+                        help='Bit width for quantization of DCLL layer state eps0')
+    parser.add_argument('--eps1_bit_width', type=int, default='16',
+                        help='Bit width for quantization of DCLL layer state eps1')
+    parser.add_argument('--forward_state_quantized', type=bool, default=False,
+                        help='Switch network to different forward path (not for training) with quantized internal state')
     return parser.parse_args()
 
 
@@ -278,8 +284,9 @@ if __name__ == '__main__':
             acc = np.mean(acc_test[test_idx], axis=0)
             acc_ref = np.mean(acc_test_ref[test_idx], axis=0)
             print('Step {} \t Accuracy {} \t Ref {}'.format(step, acc, acc_ref))
-            logfile = open(os.path.join(d, 'logfile-accuracy.txt'), 'a')
-            logfile.write('Step {} \t Accuracy {} \t Ref {}\n'.format(step, acc, acc_ref))
-            logfile.close()
+            if not args.no_save:
+                logfile = open(os.path.join(d, 'logfile-accuracy.txt'), 'a')
+                logfile.write('Step {} \t Accuracy {} \t Ref {}\n'.format(step, acc, acc_ref))
+                logfile.close()
 
     writer.close()

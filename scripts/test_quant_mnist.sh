@@ -13,7 +13,7 @@ n_test_samples=1024
 
 weight_bit_width=8
 eps0_bit_width=8
-eps1_bit_width=16
+eps1_bit_width=8
 
 python -u quant_test.py \
     --data $data \
