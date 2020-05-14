@@ -91,6 +91,7 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
+    print("args.forward_state_quantized " + str(args.forward_state_quantized))
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
@@ -215,17 +216,9 @@ if __name__ == '__main__':
                           '. Try to decrease your batch_size_test with the --batch_size_test argument.')
                     raise
 
-                test_labels2h = torch.Tensor(test_labels).to(device)
-
                 test_labels1h = torch.Tensor(test_labels).to(device)
                 test_ref_input = torch.Tensor(test_data[0]).to(device).reshape(-1, *ref_im_dims)
                 test_ref_label = torch.Tensor(test_data[1]).to(device)
-
-                for i in range(test_labels2h.shape[1]-1):
-                    test_labels2h[0][i] = test_labels2h[0][i+1]
-
-                for j in range(test_labels2h.shape[0]):
-                    test_labels2h[j] = test_labels2h[0]
 
                 net.reset()
                 net.eval()

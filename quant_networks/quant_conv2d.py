@@ -364,6 +364,7 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
         input, input_scale, input_bit_width = self.unpack_input(input)
         quant_weight, quant_weight_scale, quant_weight_bit_width = self.weight_quant(self.weight)
         quant_weight = self.weight_reg(quant_weight)
+        quant_weight = -quant_weight
 
         if self.compute_output_bit_width:
             assert input_bit_width is not None
@@ -380,7 +381,8 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
             self.init_state(input.shape[0], input.shape[2:4])
 
         eps0 = self.eps0_quant_identity(input * self.tau_s__dt + self.alphas * self.state.eps0)
-        eps1 = self.eps1_quant_identity(self.alpha * self.state.eps1 + eps0 * self.tau_m__dt)
+        eps1 = self.state.eps1
+        #eps1 = self.eps1_quant_identity(self.alpha * self.state.eps1 + eps0 * self.tau_m__dt)
         #eps0 = input * self.tau_s__dt + self.alphas * self.state.eps0
         #eps1 = self.alpha * self.state.eps1 + eps0 * self.tau_m__dt
         pvmem = F.conv2d(eps1, quant_weight, self.bias, self.stride,
@@ -563,9 +565,11 @@ class QuantConv2dDCLLlayer(nn.Module):
                                                           stride=stride, alpha=alpha, alphas=alphas, alpharp=alpharp, wrp=wrp, act=act, random_tau=random_tau)
         else:
             if forward_state_quantized:
+                print("[USE QuantContinuousConv2DState")
                 self.i2h = QuantContinuousConv2DState(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
                                         stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau, weight_bit_width=weight_bit_width)
             else:
+                print("[USE QuantContinuousConv2D")
                 self.i2h = QuantContinuousConv2D(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
                                         stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau, weight_bit_width=weight_bit_width)
         conv_shape = self.i2h.get_output_shape(self.im_dims)
