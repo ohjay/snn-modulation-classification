@@ -186,6 +186,8 @@ if __name__ == '__main__':
             pickle.dump(vars(args), fp)
         save_source(d)
 
+        print(args)
+
         # Log python commit
         commit_logfile = open(os.path.join(d, 'current_commit.txt'), 'w')
         commit_msg = subprocess.check_output('git log -1', shell=True)
