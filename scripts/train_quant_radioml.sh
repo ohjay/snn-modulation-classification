@@ -20,8 +20,7 @@ batch_size=512
 batch_size_test=512
 n_test_samples=512
 
-# -u to immediately print to stdout (for file redirect to see output before script ends)
-python -u train.py \
+python -u quant_train.py \
     --data $data \
     --radio_ml_data_dir $radio_ml_data_dir \
     --I_resolution $I_resolution \

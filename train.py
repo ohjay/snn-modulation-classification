@@ -6,6 +6,8 @@ import argparse
 import datetime
 from tensorboardX import SummaryWriter
 
+import subprocess # execute git command
+
 from dcll.pytorch_libdcll import device
 from dcll.experiment_tools import mksavedir, save_source, annotate
 from dcll.pytorch_utils import grad_parameters, named_grad_parameters, NetworkDumper, tonumpy
@@ -177,6 +179,12 @@ if __name__ == '__main__':
 
         print(args)
 
+        # Log python commit
+        commit_logfile = open(os.path.join(d, 'current_commit.txt'), 'w')
+        commit_msg = subprocess.check_output('git log -1', shell=True)
+        commit_logfile.write(commit_msg.decode('utf-8'))
+        commit_logfile.close()
+
     n_tests_total = np.ceil(float(args.n_steps) /
                             args.n_test_interval).astype(int)
     acc_test = np.empty([n_tests_total, n_test, len(net.dcll_slices)])
@@ -269,5 +277,8 @@ if __name__ == '__main__':
             acc = np.mean(acc_test[test_idx], axis=0)
             acc_ref = np.mean(acc_test_ref[test_idx], axis=0)
             print('Step {} \t Accuracy {} \t Ref {}'.format(step, acc, acc_ref))
+            logfile = open(os.path.join(d, 'logfile-accuracy.txt'), 'a')
+            logfile.write('Step {} \t Accuracy {} \t Ref {}\n'.format(step, acc, acc_ref))
+            logfile.close()
 
     writer.close()

@@ -102,10 +102,15 @@ class QuantConvNetwork(torch.nn.Module):
                  target_size, act,
                  loss, opt, opt_param,
                  DCLLSlice=DCLLClassification,
-                 burnin=50
+                 burnin=50,
+                 weight_bit_width=8
                  ):
         super(QuantConvNetwork, self).__init__()
         self.batch_size = batch_size
+
+        if not hasattr(args, "forward_state_quantized"):
+            args.forward_state_quantized = False
+            print("[QuantConvNetwork] args.forward_state_quantized doesn't exist, set it to False")
 
         def make_conv(inp, conf, is_output_layer=False):
             out_channels = conf['out_channels']
@@ -125,7 +130,11 @@ class QuantConvNetwork(torch.nn.Module):
                                     random_tau=args.random_tau,
                                     spiking=True,
                                     lc_dropout=.5,
-                                    output_layer=is_output_layer
+                                    output_layer=is_output_layer,
+                                    weight_bit_width=args.weight_bit_width,
+                                    eps0_bit_width=args.eps0_bit_width,
+                                    eps1_bit_width=args.eps1_bit_width,
+                                    forward_state_quantized=args.forward_state_quantized
                                     ).to(device).init_hiddens(batch_size)
             return layer, torch.Size([layer.out_channels]) + layer.output_shape
 

@@ -8,7 +8,7 @@ batch_size=128
 batch_size_test=512
 n_test_samples=1024
 
-python train.py \
+python -u train.py \
     --data $data \
     --network_spec $network_spec \
     --ref_network_spec $ref_network_spec \

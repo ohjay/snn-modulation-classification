@@ -19,10 +19,13 @@ from brevitas.core.stats import StatsInputViewShapeImpl, StatsOp
 from brevitas.function.ops import max_uint
 from brevitas.function.ops_ste import ceil_ste
 from brevitas.proxy.parameter_quant import WeightQuantProxy, BiasQuantProxy, WeightReg
+from brevitas.nn.quant_activation import QuantIdentity
 from brevitas.utils.python_utils import AutoName
 from brevitas.nn.quant_bn import mul_add_from_bn
 from brevitas.nn.quant_layer import QuantLayer, SCALING_MIN_VAL
 from brevitas.config import docstrings
+from brevitas.core.restrict_val import FloatToIntImplType
+
 
 class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
     NeuronState = namedtuple('NeuronState', ('eps0', 'eps1'))
@@ -41,6 +44,7 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
                  act=nn.Sigmoid(),
                  random_tau=False,
                  spiking=True,
+                 weight_bit_width=8,
                  **kwargs):
         #super(QuantContinuousConv2D, self).__init__()
         ContinuousConv2D.__init__(self,
@@ -64,6 +68,10 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
                compute_output_bit_width=False,
                return_quant_tensor=False)
 
+        self.weight_bit_width = weight_bit_width
+
+        print("[QuantConv2dDCLL] weight_bit_width set to {}".format(self.weight_bit_width))
+
         # For now take default parameters from QuantConv2D in Brevitas an hardcode here:
         bias_quant_type = QuantType.FP
         bias_narrow_range = False
@@ -75,7 +83,7 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
         weight_bit_width_impl_override = None
         weight_bit_width_impl_type = BitWidthImplType.CONST
         weight_restrict_bit_width_type = RestrictValueType.INT
-        weight_bit_width = 8
+        weight_bit_width = self.weight_bit_width
         weight_min_overall_bit_width = 2
         weight_max_overall_bit_width = None
         weight_scaling_impl_type = ScalingImplType.STATS
@@ -140,6 +148,7 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
                                                  scaling_stats_sigma=weight_scaling_stats_sigma,
                                                  scaling_min_val=weight_scaling_min_val,
                                                  override_pretrained_bit_width=weight_override_pretrained_bit_width)
+
         self.bias_quant = BiasQuantProxy(quant_type=bias_quant_type,
                                          bit_width=bias_bit_width,
                                          narrow_range=bias_narrow_range)        
@@ -194,6 +203,8 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
             self.randomize_tau(im_dims)
             self.random_tau = False
 
+
+
         return self.state
 
     def randomize_tau(self, im_dims, low=[5, 5], high=[10, 35]):
@@ -213,6 +224,9 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
             1./(1-self.alphas), requires_grad=False)
 
     def forward(self, input):
+        # input: input tensor of shape (minibatch x in_channels x iH x iW)
+        # weight: filters of shape (out_channels x (in_channels / groups) x kH x kW)
+
         output_scale = None
         output_bit_width = None
         quant_bias_bit_width = None
@@ -228,8 +242,6 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
             assert input_scale is not None
             output_scale = input_scale * quant_weight_scale
             
-        # input: input tensor of shape (minibatch x in_channels x iH x iW)
-        # weight: filters of shape (out_channels x (in_channels / groups) x kH x kW)
         if not (input.shape[0] == self.state.eps0.shape[0] == self.state.eps1.shape[0]):
             logging.warning("Batch size changed from {} to {} since last iteration. Reallocating states."
                             .format(self.state.eps0.shape[0], input.shape[0]))
@@ -250,6 +262,168 @@ class QuantContinuousConv2D(QuantLayer, ContinuousConv2D):
 
     def init_prev(self, batch_size, im_dims):
         return torch.zeros(batch_size, self.in_channels, im_dims[0], im_dims[1])
+
+class QuantContinuousConv2DState(QuantContinuousConv2D):
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride=1,
+                 padding=2,
+                 dilation=1,
+                 groups=1,
+                 bias=True,
+                 alpha=.95,
+                 alphas=.9,
+                 act=nn.Sigmoid(),
+                 random_tau=False,
+                 spiking=True,
+                 weight_bit_width=8,
+                 eps0_bit_width=8,
+                 eps1_bit_width=16,
+                 **kwargs):
+        QuantContinuousConv2D.__init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride=1,
+                 padding=2,
+                 dilation=1,
+                 groups=1,
+                 bias=True,
+                 alpha=.95,
+                 alphas=.9,
+                 act=nn.Sigmoid(),
+                 random_tau=False,
+                 spiking=True,
+                 weight_bit_width=8,
+                 **kwargs)
+        self.eps0_max = float('-inf')
+        self.eps0_min = float('inf')
+        self.eps1_min = float('inf')
+        self.eps1_max = float('-inf')
+
+        self.pvmem_max = float('-inf')
+        self.pvmem_min = float('inf')
+        self.pv_max = float('-inf')
+        self.pv_min = float('inf')
+
+        print("[QuantContinuousConv2DState] eps0_bit_width = " + str(eps0_bit_width))
+        print("[QuantContinuousConv2DState] eps1_bit_width = " + str(eps1_bit_width))
+
+        self.eps0_quant_identity = QuantIdentity(bit_width = eps0_bit_width,
+                 min_val = 0,
+                 max_val = 100,
+                 narrow_range = False,
+                 quant_type = QuantType.INT,
+                 float_to_int_impl_type = FloatToIntImplType.ROUND,
+                 scaling_impl_type = ScalingImplType.CONST,
+                 scaling_override = None,
+                 scaling_per_channel = False,
+                 scaling_stats_sigma = 3.0,
+                 scaling_stats_op = StatsOp.MEAN_LEARN_SIGMA_STD,
+                 scaling_stats_buffer_momentum = 0.1,
+                 scaling_stats_permute_dims = (1, 0, 2, 3),
+                 per_channel_broadcastable_shape = None,
+                 min_overall_bit_width = 2,
+                 max_overall_bit_width = None,
+                 bit_width_impl_override = None,
+                 bit_width_impl_type = BitWidthImplType.CONST,
+                 restrict_bit_width_type = RestrictValueType.INT,
+                 restrict_scaling_type = RestrictValueType.LOG_FP,
+                 scaling_min_val = SCALING_MIN_VAL,
+                 override_pretrained_bit_width = False,
+                 return_quant_tensor = False)
+
+        self.eps1_quant_identity = QuantIdentity(bit_width = eps1_bit_width,
+                 min_val = 0,
+                 max_val = 20000,
+                 narrow_range = False,
+                 quant_type = QuantType.INT,
+                 float_to_int_impl_type = FloatToIntImplType.ROUND,
+                 scaling_impl_type = ScalingImplType.CONST,
+                 scaling_override = None,
+                 scaling_per_channel = False,
+                 scaling_stats_sigma = 3.0,
+                 scaling_stats_op = StatsOp.MEAN_LEARN_SIGMA_STD,
+                 scaling_stats_buffer_momentum = 0.1,
+                 scaling_stats_permute_dims = (1, 0, 2, 3),
+                 per_channel_broadcastable_shape = None,
+                 min_overall_bit_width = 2,
+                 max_overall_bit_width = None,
+                 bit_width_impl_override = None,
+                 bit_width_impl_type = BitWidthImplType.CONST,
+                 restrict_bit_width_type = RestrictValueType.INT,
+                 restrict_scaling_type = RestrictValueType.LOG_FP,
+                 scaling_min_val = SCALING_MIN_VAL,
+                 override_pretrained_bit_width = False,
+                 return_quant_tensor = False)
+
+
+
+    def forward(self, input):
+        # input: input tensor of shape (minibatch x in_channels x iH x iW)
+        # weight: filters of shape (out_channels x (in_channels / groups) x kH x kW)
+
+        output_scale = None
+        output_bit_width = None
+        quant_bias_bit_width = None
+
+        input, input_scale, input_bit_width = self.unpack_input(input)
+        quant_weight, quant_weight_scale, quant_weight_bit_width = self.weight_quant(self.weight)
+        quant_weight = self.weight_reg(quant_weight)
+
+        if self.compute_output_bit_width:
+            assert input_bit_width is not None
+            output_bit_width = self.max_output_bit_width(input_bit_width, quant_weight_bit_width)
+        if self.compute_output_scale:
+            assert input_scale is not None
+            output_scale = input_scale * quant_weight_scale
+            
+        if not (input.shape[0] == self.state.eps0.shape[0] == self.state.eps1.shape[0]):
+            logging.warning("Batch size changed from {} to {} since last iteration. Reallocating states."
+                            .format(self.state.eps0.shape[0], input.shape[0]))
+            self.init_state(input.shape[0], input.shape[2:4])
+
+        eps0 = self.eps0_quant_identity(input * self.tau_s__dt + self.alphas * self.state.eps0)
+        eps1 = self.eps1_quant_identity(self.alpha * self.state.eps1 + eps0 * self.tau_m__dt)
+        #eps0 = input * self.tau_s__dt + self.alphas * self.state.eps0
+        #eps1 = self.alpha * self.state.eps1 + eps0 * self.tau_m__dt
+        pvmem = F.conv2d(eps1, quant_weight, self.bias, self.stride,
+                         self.padding, self.dilation, self.groups)
+        pv = self.act(pvmem)
+        output = self.output_act(pvmem)
+
+        # Update state maximum
+        eps0_max = torch.max(self.state.eps0).item()
+        eps0_min = torch.min(self.state.eps0).item()
+        self.eps0_max = max(self.eps0_max, eps0_max)
+        self.eps0_min = min(self.eps0_min, eps0_min)
+
+        eps1_max = torch.max(self.state.eps1).item()
+        eps1_min = torch.min(self.state.eps1).item()
+        self.eps1_max = max(self.eps1_max, eps1_max)
+        self.eps1_min = min(self.eps1_min, eps1_min)
+
+        pvmem_max = torch.max(pvmem).item()
+        self.pvmem_max = max(self.pvmem_max, pvmem_max)
+        pvmem_min = torch.min(pvmem).item()
+        self.pvmem_min = min(self.pvmem_min, pvmem_min)
+
+        pv_max = torch.max(pv).item()
+        self.pv_max = max(self.pv_max, pv_max)
+        pv_min = torch.min(pv).item()
+        self.pv_min = min(self.pv_min, pv_min)
+
+        # best
+        #arp = .65*self.state.arp + output*10
+        self.state = self.NeuronState(eps0=eps0.detach(),
+                                      eps1=eps1.detach())
+        return output, pv, pvmem
+
+
+
+
 
 
 class QuantContinuousRelativeRefractoryConv2D(QuantContinuousConv2D):
@@ -352,7 +526,11 @@ class QuantConv2dDCLLlayer(nn.Module):
                  lc_ampl=.5,
                  spiking=True,
                  random_tau=False,
-                 output_layer=False):
+                 output_layer=False,
+                 weight_bit_width=8,
+                 eps0_bit_width=8,
+                 eps1_bit_width=16,
+                 forward_state_quantized=False):
 
         super(QuantConv2dDCLLlayer, self).__init__()
         self.im_dims = im_dims
@@ -382,8 +560,14 @@ class QuantConv2dDCLLlayer(nn.Module):
             self.i2h = QuantContinuousRelativeRefractoryConv2D(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
                                                           stride=stride, alpha=alpha, alphas=alphas, alpharp=alpharp, wrp=wrp, act=act, random_tau=random_tau)
         else:
-            self.i2h = QuantContinuousConv2D(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
-                                        stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau)
+            if forward_state_quantized:
+                print("[Use QuantContinuousConv2DState")
+                self.i2h = QuantContinuousConv2DState(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
+                                        stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau, weight_bit_width=weight_bit_width, eps0_bit_width=eps0_bit_width, eps1_bit_width=eps1_bit_width)
+            else:
+                print("[Use QuantContinuousConv2D")
+                self.i2h = QuantContinuousConv2D(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
+                                        stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau, weight_bit_width=weight_bit_width)
         conv_shape = self.i2h.get_output_shape(self.im_dims)
         print('Quant Conv2D Layer ', self.im_dims, conv_shape, self.in_channels,
               self.out_channels, kernel_size, dilation, padding, stride)

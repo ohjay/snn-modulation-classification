@@ -178,15 +178,13 @@ if __name__ == '__main__':
     dumper = NetworkDumper(writer, net)
 
     if not args.no_save:
-        out_dir = os.path.join(args.output, args.data)
+        out_dir = os.path.join(args.output, 'Test-' + args.data)
         d = mksavedir(pre=out_dir)
         annotate(d, text=log_dir, filename='log_filename.txt')
         annotate(d, text=str(args), filename='args.txt')
         with open(os.path.join(d, 'args.pkl'), 'wb') as fp:
             pickle.dump(vars(args), fp)
         save_source(d)
-
-        print(args)
 
         # Log python commit
         commit_logfile = open(os.path.join(d, 'current_commit.txt'), 'w')
@@ -208,37 +206,6 @@ if __name__ == '__main__':
                      for (samples, labels) in all_test_data]
 
     for step in range(args.n_steps):
-        if ((step + 1) % 1000) == 0:
-            for i in range(len(net.dcll_slices)):
-                net.dcll_slices[i].optimizer.param_groups[-1]['lr'] /= 2
-            net.dcll_slices[-1].optimizer2.param_groups[-1]['lr'] /= 2
-            ref_net.optim.param_groups[-1]['lr'] /= 2
-            print('Adjusting learning rates')
-
-        try:
-            input, labels = next(gen_train)
-        except StopIteration:
-            gen_train = iter(train_data)
-            input, labels = next(gen_train)
-        labels = to_one_hot(labels, target_size)
-
-        input_spikes, labels_spikes = to_spike_train(input, labels,
-                                                     **to_st_train_kwargs)
-        input_spikes = torch.Tensor(input_spikes).to(device)
-        labels_spikes = torch.Tensor(labels_spikes).to(device)
-
-        ref_input = torch.Tensor(input).to(device).reshape(-1, *ref_im_dims)
-        ref_label = torch.Tensor(labels).to(device)
-
-        # Train
-        net.reset()
-        net.train()
-        ref_net.train()
-        for sim_iteration in range(n_iters):
-            net.learn(x=input_spikes[sim_iteration],
-                      labels=labels_spikes[sim_iteration])
-            ref_net.learn(x=ref_input, labels=ref_label)
-
         # Test
         if (step % args.n_test_interval) == 0:
             test_idx = step // args.n_test_interval
