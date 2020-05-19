@@ -20,6 +20,9 @@ batch_size=512
 batch_size_test=512
 n_test_samples=512
 
+weight_bit_width=8
+
+# -u to immediately print to stdout (for file redirect to see output before script ends)
 python -u quant_train.py \
     --data $data \
     --radio_ml_data_dir $radio_ml_data_dir \
@@ -32,4 +35,5 @@ python -u quant_train.py \
     --burnin $burnin \
     --batch_size $batch_size \
     --batch_size_test $batch_size_test \
-    --n_test_samples $n_test_samples
+    --n_test_samples $n_test_samples \
+    --weight_bit_width $weight_bit_width
