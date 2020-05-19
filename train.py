@@ -175,6 +175,8 @@ if __name__ == '__main__':
             pickle.dump(vars(args), fp)
         save_source(d)
 
+        print(args)
+
     n_tests_total = np.ceil(float(args.n_steps) /
                             args.n_test_interval).astype(int)
     acc_test = np.empty([n_tests_total, n_test, len(net.dcll_slices)])
