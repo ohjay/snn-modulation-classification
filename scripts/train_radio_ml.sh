@@ -2,8 +2,8 @@
 
 data="RadioML"
 radio_ml_data_dir="/media/owen/ba9d40b5-89de-4832-bad4-156b118e4a66/2018.01"
-I_resolution=128
-Q_resolution=128
+I_resolution=16
+Q_resolution=16
 min_I=-1.0
 max_I=1.0
 min_Q=-1.0
@@ -12,8 +12,9 @@ max_Q=1.0
 network_spec="networks/radio_ml_conv.yaml"
 ref_network_spec="networks/radio_ml_conv_ref.yaml"
 
-batch_size=32
-batch_size_test=32
+burnin=50
+batch_size=512
+batch_size_test=512
 n_test_samples=512
 
 python train.py \
@@ -25,6 +26,7 @@ python train.py \
     --Q_bounds $min_Q $max_Q \
     --network_spec $network_spec \
     --ref_network_spec $ref_network_spec \
+    --burnin $burnin \
     --batch_size $batch_size \
     --batch_size_test $batch_size_test \
     --n_test_samples $n_test_samples
