@@ -13,9 +13,35 @@ class RadioMLDataset(data.Dataset):
     """
 
     def __init__(self, data_dir, train,
-                 normalize=True, min_snr=6, per_h5_frac=0.5, train_frac=0.9):
+                 normalize=True, min_snr=6, per_h5_frac=0.2, train_frac=0.9):
 
         self.train = train
+
+        if train:
+            print("Load training set")
+        else:
+            print("Load test set")
+
+        if os.path.exists('test.pkl'):
+            print("Load from pickle")
+            if train:
+                with open('train.pkl', 'rb') as f:
+                    data = pickle.load(f)
+                print("Pickle loaded")
+                self.X = data['X']
+                self.Y = data['Y']
+
+                del(data)
+            else:
+                with open('test.pkl', 'rb') as f:
+                    data = pickle.load(f)
+                print("pickle loaded")
+                self.X = data['X']
+                self.Y = data['Y']
+
+                del(data)
+            return
+
 
         if not os.path.exists(os.path.join(data_dir, 'class23_snr30.hdf5')):
             # Split huge HDF5 file into per-SNR, per-class HDF5 files
@@ -75,7 +101,8 @@ class RadioMLDataset(data.Dataset):
 
         self.X = np.zeros((total_size, 1024, 2), dtype=np.float32)
         self.Y = np.zeros(total_size, dtype=np.int64)
-        for class_idx in range(24):
+        for class_idx in range(1):
+            print("Load class {}".format(class_idx))
             for snr_idx, snr in enumerate(range(min_snr, 32, 2)):
                 class_snr_name = 'class%d_snr%d.hdf5' % (class_idx, snr)
                 h5f_path = os.path.join(data_dir, class_snr_name)
@@ -100,6 +127,20 @@ class RadioMLDataset(data.Dataset):
 
         if normalize:
             self.X = (self.X - X_minval) / (X_maxval - X_minval)
+
+        print("Save to pickle")
+        if train:
+            train_data = {"X": self.X, "Y": self.Y}
+            f = open('train.pkl', 'wb')
+            pickle.dump(train_data, f)
+            f.close()
+        else:
+            train_data = {"X": self.X, "Y": self.Y}
+            f = open('test.pkl', 'wb')
+            pickle.dump(train_data, f)
+            f.close()
+
+        print("Saved npy")
 
     def __len__(self):
         return len(self.X)
