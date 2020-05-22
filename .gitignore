@@ -1,3 +1,8 @@
+train_x.npy
+train_y.npy
+test_x.npy
+test_y.npy
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

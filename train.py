@@ -14,6 +14,7 @@ from dcll.pytorch_utils import grad_parameters, named_grad_parameters, NetworkDu
 from networks import ConvNetwork, ReferenceConvNetwork, load_network_spec
 from data.utils import to_one_hot
 
+import time
 
 def parse_args():
     parser = argparse.ArgumentParser(description='DCLL')
@@ -202,6 +203,7 @@ if __name__ == '__main__':
 
     for step in range(args.n_steps):
         print("Minibatch step {}".format(step))
+        start = time.time()
         if ((step + 1) % 1000) == 0:
             for i in range(len(net.dcll_slices)):
                 net.dcll_slices[i].optimizer.param_groups[-1]['lr'] /= 2
@@ -216,6 +218,7 @@ if __name__ == '__main__':
             input, labels = next(gen_train)
         labels = to_one_hot(labels, target_size)
 
+        print("Before to_spike_train {}".format(time.time() - start))
         input_spikes, labels_spikes = to_spike_train(input, labels,
                                                      **to_st_train_kwargs)
         input_spikes = torch.Tensor(input_spikes).to(device)
@@ -224,11 +227,13 @@ if __name__ == '__main__':
         ref_input = torch.Tensor(input).to(device).reshape(-1, *ref_im_dims)
         ref_label = torch.Tensor(labels).to(device)
 
+        print("Before train {}".format(time.time() - start))
         # Train
         net.reset()
         net.train()
         ref_net.train()
         for sim_iteration in range(n_iters):
+            print("Iteration {} time: {}:".format(sim_iteration, time.time() - start))
             net.learn(x=input_spikes[sim_iteration],
                       labels=labels_spikes[sim_iteration])
             ref_net.learn(x=ref_input, labels=ref_label)

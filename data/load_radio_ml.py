@@ -92,7 +92,7 @@ class RadioMLDataset(data.Dataset):
 
         self.X = np.zeros((total_size, 1024, 2), dtype=np.float32)
         self.Y = np.zeros(total_size, dtype=np.int64)
-        for class_idx in range(1):
+        for class_idx in range(24):
             print("Load class {}".format(class_idx))
             for snr_idx, snr in enumerate(range(min_snr, 32, 2)):
                 class_snr_name = 'class%d_snr%d.hdf5' % (class_idx, snr)
