@@ -233,10 +233,14 @@ if __name__ == '__main__':
         net.train()
         ref_net.train()
         for sim_iteration in range(n_iters):
-            print("Iteration {} time: {}:".format(sim_iteration, time.time() - start))
+            if (sim_iteration % 50 == 0):
+                print("Iteration {} time: {}:".format(sim_iteration, time.time() - start))
             net.learn(x=input_spikes[sim_iteration],
                       labels=labels_spikes[sim_iteration])
             ref_net.learn(x=ref_input, labels=ref_label)
+
+        acc = net.accuracy(labels_spikes)
+        print("Step {} Training accuracy: {}".format(step, acc))
 
         # Test
         if (step % args.n_test_interval) == 0:
