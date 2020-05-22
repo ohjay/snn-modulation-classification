@@ -198,7 +198,10 @@ if __name__ == '__main__':
     all_test_data = [(samples, to_one_hot(labels, target_size))
                      for (samples, labels) in all_test_data]
 
+    print("\n\nStart Training\n")
+
     for step in range(args.n_steps):
+        print("Minibatch step {}".format(step))
         if ((step + 1) % 1000) == 0:
             for i in range(len(net.dcll_slices)):
                 net.dcll_slices[i].optimizer.param_groups[-1]['lr'] /= 2

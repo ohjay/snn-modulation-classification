@@ -22,24 +22,15 @@ class RadioMLDataset(data.Dataset):
         else:
             print("Load test set")
 
-        if os.path.exists('test.pkl'):
-            print("Load from pickle")
+        if os.path.exists('test_y.npy'):
+            print("Start loading from npy file")
             if train:
-                with open('train.pkl', 'rb') as f:
-                    data = pickle.load(f)
-                print("Pickle loaded")
-                self.X = data['X']
-                self.Y = data['Y']
-
-                del(data)
+                self.X = np.load('train_x.npy')
+                self.Y = np.load('train_y.npy')
             else:
-                with open('test.pkl', 'rb') as f:
-                    data = pickle.load(f)
-                print("pickle loaded")
-                self.X = data['X']
-                self.Y = data['Y']
-
-                del(data)
+                self.X = np.load('test_x.npy')
+                self.Y = np.load('test_y.npy')
+            print("Data loaded from npy file")
             return
 
 
@@ -128,17 +119,13 @@ class RadioMLDataset(data.Dataset):
         if normalize:
             self.X = (self.X - X_minval) / (X_maxval - X_minval)
 
-        print("Save to pickle")
+        print("Save to npy file")
         if train:
-            train_data = {"X": self.X, "Y": self.Y}
-            f = open('train.pkl', 'wb')
-            pickle.dump(train_data, f)
-            f.close()
+            np.save('train_x.npy', self.X)
+            np.save('train_y.npy', self.Y)
         else:
-            train_data = {"X": self.X, "Y": self.Y}
-            f = open('test.pkl', 'wb')
-            pickle.dump(train_data, f)
-            f.close()
+            np.save('test_x.npy', self.X)
+            np.save('test_y.npy', self.Y)
 
         print("Saved npy")
 
