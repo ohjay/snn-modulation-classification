@@ -36,4 +36,5 @@ python -u quant_train.py \
     --batch_size $batch_size \
     --batch_size_test $batch_size_test \
     --n_test_samples $n_test_samples \
-    --weight_bit_width $weight_bit_width
+    --weight_bit_width $weight_bit_width \
+    --n_test_interval 5
