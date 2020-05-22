@@ -5,6 +5,8 @@ from ast import literal_eval as make_tuple
 
 from dcll.pytorch_libdcll import Conv2dDCLLlayer, DenseDCLLlayer, device, DCLLClassification
 
+import time
+
 
 def load_network_spec(yaml_path):
     network_spec = yaml.load(open(yaml_path, 'r'))
@@ -152,9 +154,14 @@ class ConvNetwork(torch.nn.Module):
 
     def learn(self, x, labels):
         spikes = x
+        print("Start")
+        start = time.time()
         for s in self.dcll_slices:
+            print("Slice")
+            start=time.time()
             spikes, _, _, _, _ = s.train_dcll(
                 spikes, labels, regularize=False)
+            print("Time {}".format(time.time()-start))
 
     def test(self, x):
         spikes = x

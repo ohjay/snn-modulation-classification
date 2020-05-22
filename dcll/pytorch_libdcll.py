@@ -21,6 +21,8 @@ import logging
 from collections import Counter
 import math
 
+import time
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -585,14 +587,20 @@ class Conv2dDCLLlayer(nn.Module):
         return height, weight
 
     def forward(self, input):
+        print("\t\tInside Conv2d")
+        start = time.time()
         output, pv, pvmem = self.i2h(input)
+        print("\t\ta: {}:".format(time.time()-start))
         output, pv = self.pool(output), self.pool(pv)
+        print("\t\tb: {}:".format(time.time()-start))
         flatten = pv.view(pv.shape[0], -1)
+        print("\t\tc: {}:".format(time.time()-start))
         pvoutput = self.dropout(self.i2o(flatten))
+        print("\t\td: {}:".format(time.time()-start))
 
         if self.output_layer:
             output = self.output_(flatten.detach())
-
+        print("\t\te: {}:".format(time.time()-start))
         return output, pvoutput, pv, pvmem
 
     def init_hiddens(self, batch_size, init_value=0):
@@ -635,12 +643,16 @@ class DCLLBase(nn.Module):
             self.dclllayer.init_hiddens(batch_size, init_value=0)
 
     def forward(self, input):
+        print("\t\t\tself.forward")
+        start=time.time()
         self.iter += 1
         o, p, pv, pvmem = self.dclllayer.forward(input)
+        print("\t\t\tatime: {}".format(time.time()-start))
         if self.collect_stats:
             if (self.iter % 20) == 0:
                 self.activity_hist.append(np.histogram(
                     pv.detach().cpu().numpy(), bins=self.stats_bins)[0])
+        print("\t\t\tbtime: {}".format(time.time()-start))
         return o, p, pv, pvmem
 
     def write_stats(self, writer, label, epoch):
@@ -670,10 +682,15 @@ class DCLLBase(nn.Module):
                   ' low:{0:1.3} high:{1:1.3}'.format(pd[0], pd[-1]))
 
     def train_dcll(self, input, target, do_train=True, regularize=0.05):
+        print("\tStart Train DCLL")
+        start = time.time()
         output, pvoutput, pv, pvmem = self.forward(input)
+        print("\tAfter forward: {}".format(time.time()-start))
         if self.iter >= self.burnin:
             self.dclllayer.zero_grad()
             tgt_loss = self.crit(pvoutput, target)
+            print("\tB After forward: {}".format(time.time()-start))
+
             if self.dclllayer.output_layer:
                 out_loss = self.output_crit(output, target)
                 tgt_loss += out_loss
@@ -683,14 +700,19 @@ class DCLLBase(nn.Module):
                 loss = tgt_loss + reg_loss + reg2_loss
             else:
                 loss = tgt_loss
+            print("\tC After forward: {}".format(time.time()-start))
+
             loss.backward()
+            print("\tC After forward: {}".format(time.time()-start))
+
             if do_train:
                 self.optimizer.step()
                 if self.dclllayer.output_layer:
                     self.optimizer2.step()
+            print("\tD After forward: {}".format(time.time()-start))
         else:
             tgt_loss = torch.Tensor([0])
-
+        print("\tE After forward: {}".format(time.time()-start))
         return output, pvoutput, pv, pvmem, tgt_loss.detach()
 
 
