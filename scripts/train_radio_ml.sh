@@ -4,8 +4,8 @@ data="RadioML"
 
 radio_ml_data_dir="/lif/radioml/2018.01/"
 
-I_resolution=16
-Q_resolution=16
+I_resolution=32
+Q_resolution=32
 
 min_I=-1.0
 max_I=1.0
