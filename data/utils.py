@@ -45,8 +45,6 @@ def iq2spiketrain(x, y, out_w=28, out_h=28,
     batch_size = x.shape[0]
     num_timesteps = x.shape[-1]
     spike_trains = np.zeros((max_duration, batch_size, 1, out_h, out_w))
-    out_h -= 2
-    out_w -= 2
     for t in range(min(max_duration, num_timesteps)):
         # Obtain I/Q values
         I_value = x[:, 0, t]
@@ -70,14 +68,6 @@ def iq2spiketrain(x, y, out_w=28, out_h=28,
         # Assign events to samples
         for b in range(batch_size):
             spike_trains[t, b, 0, cell_Q[b], cell_I[b]] = 1
-            spike_trains[t, b, 0, cell_Q[b], cell_I[b]+1] = 1
-            spike_trains[t, b, 0, cell_Q[b], cell_I[b]+2] = 1
-            spike_trains[t, b, 0, cell_Q[b]+1, cell_I[b]] = 1
-            spike_trains[t, b, 0, cell_Q[b]+1, cell_I[b]+1] = 1
-            spike_trains[t, b, 0, cell_Q[b]+1, cell_I[b]+2] = 1
-            spike_trains[t, b, 0, cell_Q[b]+2, cell_I[b]] = 1
-            spike_trains[t, b, 0, cell_Q[b]+2, cell_I[b]+1] = 1
-            spike_trains[t, b, 0, cell_Q[b]+2, cell_I[b]+2] = 1
 
     # The shape of `all_target` is (max_duration, batch_size, target_size)
     all_target = np.repeat(y[np.newaxis, :, :], max_duration, axis=0)
