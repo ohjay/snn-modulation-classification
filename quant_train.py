@@ -255,7 +255,7 @@ if __name__ == '__main__':
         acc = net.accuracy(labels_spikes)
         print("Step {} Training accuracy: {}".format(step, acc))
 
-        if not arg.no_save:
+        if not args.no_save:
             logfile = open(os.path.join(d, 'logfile-train-accuracy.txt'), 'a')
             logfile.write('Step {} \t Accuracy {} \n'.format(step, acc))
             logfile.close()

@@ -242,7 +242,7 @@ if __name__ == '__main__':
         acc = net.accuracy(labels_spikes)
         print("Step {} Training accuracy: {}".format(step, acc))
 
-        if not arg.no_save:
+        if not args.no_save:
             logfile = open(os.path.join(d, 'logfile-train-accuracy.txt'), 'a')
             logfile.write('Step {} \t Accuracy {} \n'.format(step, acc))
             logfile.close()
@@ -294,7 +294,7 @@ if __name__ == '__main__':
             acc = np.mean(acc_test[test_idx], axis=0)
             acc_ref = np.mean(acc_test_ref[test_idx], axis=0)
             print('Step {} \t Accuracy {} \t Ref {}'.format(step, acc, acc_ref))
-            if not arg.no_save:
+            if not args.no_save:
                 logfile = open(os.path.join(d, 'logfile-accuracy.txt'), 'a')
                 logfile.write('Step {} \t Accuracy {} \t Ref {}\n'.format(step, acc, acc_ref))
                 logfile.close()
