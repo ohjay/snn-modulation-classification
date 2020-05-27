@@ -100,7 +100,7 @@ class ReferenceConvNetwork(torch.nn.Module):
 class QuantConvNetwork(torch.nn.Module):
     def __init__(self, args, im_dims, batch_size, convs,
                  target_size, act,
-                 loss, opt, opt_param,
+                 loss, opt, opt_param, learning_rates,
                  DCLLSlice=DCLLClassification,
                  burnin=50,
                  weight_bit_width=8
@@ -148,6 +148,10 @@ class QuantConvNetwork(torch.nn.Module):
 
         self.dcll_slices = []
         for i, layer in enumerate(self.layers):
+            layer_opt_param = opt_param.copy()
+            if learning_rates is not None:
+                lr_idx = min(i, len(learning_rates) - 1)
+                layer_opt_param['lr'] = learning_rates[lr_idx]
             name = 'conv%d' % i
             self.dcll_slices.append(
                 DCLLSlice(
@@ -156,7 +160,7 @@ class QuantConvNetwork(torch.nn.Module):
                     batch_size=batch_size,
                     loss=loss,
                     optimizer=opt,
-                    kwargs_optimizer=opt_param,
+                    kwargs_optimizer=layer_opt_param,
                     collect_stats=True,
                     burnin=burnin)
             )
