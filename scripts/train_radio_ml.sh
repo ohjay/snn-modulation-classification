@@ -16,16 +16,17 @@ max_Q=1.0
 network_spec="networks/radio_ml_conv.yaml"
 ref_network_spec="networks/radio_ml_conv_ref.yaml"
 
-burnin=20
+burnin=900
 n_iters=1024
 n_iters_test=1024
 batch_size=512
 batch_size_test=512
 n_test_samples=512
+n_test_interval=10
 learning_rates=(0.000000025)
 ref_lr=0.001
 
-python train.py \
+python3 train.py \
     --data $data \
     --radio_ml_data_dir $radio_ml_data_dir \
     --min_snr $min_snr \
@@ -44,5 +45,6 @@ python train.py \
     --batch_size $batch_size \
     --batch_size_test $batch_size_test \
     --n_test_samples $n_test_samples \
+    --n_test_interval $n_test_interval \
     --learning_rates "${learning_rates[@]/#/}" \
     --ref_lr $ref_lr

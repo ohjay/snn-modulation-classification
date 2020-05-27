@@ -20,6 +20,7 @@ from collections import namedtuple
 import logging
 from collections import Counter
 import math
+from apex import amp
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -601,6 +602,8 @@ class Conv2dDCLLlayer(nn.Module):
 
 
 class DCLLBase(nn.Module):
+    num_instances = 0
+
     def __init__(self, dclllayer, name='DCLLbase', batch_size=48, loss=torch.nn.MSELoss, optimizer=optim.SGD, kwargs_optimizer={'lr': 5e-5}, burnin=200, collect_stats=False):
         """
         *dclllayer*: layer that supports local learning
@@ -628,6 +631,8 @@ class DCLLBase(nn.Module):
         self.init(self.batch_size)
         self.stats_bins = np.linspace(0, 1, 20)
         self.name = name
+        self.slice_id = DCLLBase.num_instances
+        DCLLBase.num_instances += 1
 
     def init(self, batch_size, init_states=True):
         self.clout = []
@@ -680,12 +685,18 @@ class DCLLBase(nn.Module):
                 out_loss = self.output_crit(output, target)
                 tgt_loss += out_loss
             if regularize > 0:
-                reg_loss = 200e-1*regularize*torch.mean(torch.relu(pvmem+.01))
-                reg2_loss = 1e-1*regularize*(torch.relu(.1-torch.mean(pv)))
+                reg_loss = 20.0 * regularize * torch.mean(torch.relu(pvmem + 0.01))
+                reg2_loss = 0.1 * regularize * (torch.relu(0.1 - torch.mean(pv)))
                 loss = tgt_loss + reg_loss + reg2_loss
             else:
                 loss = tgt_loss
             loss.backward()
+            # if self.dclllayer.output_layer:
+            #     with amp.scale_loss(loss, [self.optimizer, self.optimizer2], loss_id=self.slice_id) as scaled_loss:
+            #         scaled_loss.backward()
+            # else:
+            #     with amp.scale_loss(loss, self.optimizer, loss_id=self.slice_id) as scaled_loss:
+            #         scaled_loss.backward()
             if do_train:
                 self.optimizer.step()
                 if self.dclllayer.output_layer:
@@ -697,9 +708,9 @@ class DCLLBase(nn.Module):
 
 
 class DCLLClassification(DCLLBase):
-    def forward(self, input):
+    def forward(self, input, ignore_burnin=False):
         o, p, pv, pvmem = super(DCLLClassification, self).forward(input)
-        if self.iter >= self.burnin:
+        if ignore_burnin or self.iter >= self.burnin:
             if self.dclllayer.output_layer:
                 self.clout.append(o.argmax(1).detach().cpu().numpy())
             else:

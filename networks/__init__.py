@@ -2,6 +2,7 @@ import yaml
 import torch
 import numpy as np
 from ast import literal_eval as make_tuple
+from apex import amp
 
 from dcll.pytorch_libdcll import Conv2dDCLLlayer, DenseDCLLlayer, device, DCLLClassification
 
@@ -146,41 +147,42 @@ class ConvNetwork(torch.nn.Module):
 
         n = im_dims
         self.num_layers = len(convs)
-        self.layers = torch.nn.ModuleList()
+        self.dcll_slices = torch.nn.ModuleList()
         for i in range(self.num_layers):
             is_output_layer = (i == self.num_layers - 1)
             layer, n = make_conv(n, convs[i], is_output_layer)
-            self.layers.append(layer)
-
-        self.dcll_slices = []
-        for i, layer in enumerate(self.layers):
             layer_opt_param = opt_param.copy()
             if learning_rates is not None:
                 lr_idx = min(i, len(learning_rates) - 1)
                 layer_opt_param['lr'] = learning_rates[lr_idx]
             name = 'conv%d' % i
-            self.dcll_slices.append(
-                DCLLSlice(
-                    dclllayer=layer,
-                    name=name,
-                    batch_size=batch_size,
-                    loss=loss,
-                    optimizer=opt,
-                    kwargs_optimizer=layer_opt_param,
-                    collect_stats=True,
-                    burnin=burnin)
-            )
+            s = DCLLSlice(dclllayer=layer,
+                          name=name,
+                          batch_size=batch_size,
+                          loss=loss,
+                          optimizer=opt,
+                          kwargs_optimizer=layer_opt_param,
+                          collect_stats=True,
+                          burnin=burnin)
+            # if is_output_layer:
+            #     s, [s.optimizer, s.optimizer2] = \
+            #         amp.initialize(s, [s.optimizer, s.optimizer2], opt_level='O1', num_losses=self.num_layers)
+            # else:
+            #     s, s.optimizer = amp.initialize(s, s.optimizer, opt_level='O1', num_losses=self.num_layers)
+            self.dcll_slices.append(s)
+
 
     def learn(self, x, labels):
+        # with torch.autograd.detect_anomaly():
         spikes = x
         for s in self.dcll_slices:
             spikes, _, _, _, _ = s.train_dcll(
-                spikes, labels, regularize=False)
+                spikes, labels, regularize=False)  # 0.1)
 
     def test(self, x):
         spikes = x
         for s in self.dcll_slices:
-            spikes, _, _, _ = s.forward(spikes)
+            spikes, _, _, _ = s.forward(spikes, ignore_burnin=True)
 
     def reset(self, init_states=False):
         for s in self.dcll_slices:

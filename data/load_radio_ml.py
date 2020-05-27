@@ -13,7 +13,7 @@ class RadioMLDataset(data.Dataset):
     """
 
     def __init__(self, data_dir, train,
-                 normalize=True, min_snr=6, max_snr=30, per_h5_frac=0.5, train_frac=0.9):
+                 normalize=False, min_snr=6, max_snr=30, per_h5_frac=0.5, train_frac=0.9):
 
         self.train = train
 
@@ -108,7 +108,7 @@ class RadioMLDataset(data.Dataset):
         return self.X[index], self.Y[index]
 
 
-def get_radio_ml_loader(batch_size, train, taskid=0, **kwargs):
+def get_radio_ml_loader(batch_size, train, **kwargs):
     data_dir = kwargs['data_dir']
     min_snr = kwargs.get('min_snr', 6)
     max_snr = kwargs.get('max_snr', 30)
@@ -127,8 +127,6 @@ def get_radio_ml_loader(batch_size, train, taskid=0, **kwargs):
     loader = DataLoader(dataset=dataset,
                         batch_size=batch_size,
                         shuffle=train)
-    loader.taskid = taskid
-    loader.name = 'RadioML_{}'.format(taskid)
-    loader.short_name = 'RadioML'
+    loader.name = 'RadioML_{}'.format(identifier)
 
     return loader
