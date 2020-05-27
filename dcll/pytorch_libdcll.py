@@ -556,11 +556,11 @@ class Conv2dDCLLlayer(nn.Module):
         self.i2o = nn.Linear(np.prod(self.get_flat_size()),
                              target_size, bias=True)
         self.i2o.weight.requires_grad = False
+        self.i2o.bias.requires_grad = False
         if lc_dropout is not False:
             self.dropout = torch.nn.Dropout(p=lc_dropout)
         else:
             self.dropout = lambda x: x
-        self.i2o.bias.requires_grad = False
 
         if output_layer:
             self.output_ = nn.Linear(
@@ -612,14 +612,16 @@ class DCLLBase(nn.Module):
         """
         super(DCLLBase, self).__init__()
         self.dclllayer = dclllayer
-        self.crit = loss().to(device)
-        # self.output_crit = nn.CrossEntropyLoss().to(device)
-        self.output_crit = loss().to(device)
-        self.optimizer = optimizer(
-            dclllayer.i2h.parameters(), **kwargs_optimizer)
-        if self.dclllayer.output_layer:
-            self.optimizer2 = optimizer(
-                dclllayer.output_.parameters(), lr=1e-4)
+        if loss is not None:
+            self.crit = loss().to(device)
+            # self.output_crit = nn.CrossEntropyLoss().to(device)
+            self.output_crit = loss().to(device)
+        if optimizer is not None:
+            self.optimizer = optimizer(
+                dclllayer.i2h.parameters(), **kwargs_optimizer)
+            if self.dclllayer.output_layer:
+                self.optimizer2 = optimizer(
+                    dclllayer.output_.parameters(), lr=1e-4)
         self.burnin = burnin
         self.batch_size = batch_size
         self.collect_stats = collect_stats

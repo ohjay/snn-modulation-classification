@@ -63,8 +63,8 @@ def iq2spiketrain(x, y, out_w=28, out_h=28,
             cell_I = (cell_I + 1.0) * 0.5
             cell_Q = (cell_Q + 1.0) * 0.5
         # Quantize to cells in image (scale, clamp, convert to int)
-        cell_I = torch.clamp(cell_I * out_w, 0, out_w - 1).int()
-        cell_Q = torch.clamp(cell_Q * out_h, 0, out_h - 1).int()
+        cell_I = (cell_I.clamp(0, 1) * (out_w - 1)).int()
+        cell_Q = (cell_Q.clamp(0, 1) * (out_h - 1)).int()
         # Assign events to samples
         for b in range(batch_size):
             spike_trains[t, b, 0, cell_Q[b], cell_I[b]] = 1

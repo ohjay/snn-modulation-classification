@@ -40,9 +40,10 @@ class ReferenceConvNetwork(torch.nn.Module):
                                 out_channels=int(out_channels * args.netscale),
                                 kernel_size=kernel_size,
                                 padding=padding),
-                torch.nn.ReLU(),
                 torch.nn.MaxPool2d(
-                    kernel_size=pooling, stride=pooling, padding=pool_pad)
+                    kernel_size=pooling, stride=pooling, padding=pool_pad),
+                torch.nn.BatchNorm2d(int(out_channels * args.netscale)),
+                torch.nn.ReLU()
             )
             layer = layer.to(device)
             return (layer, [out_channels])
@@ -62,24 +63,40 @@ class ReferenceConvNetwork(torch.nn.Module):
             return x.shape[1:]
 
         # Should we train linear decoders? They are not in DCLL
-        self.linear = torch.nn.Linear(np.prod(latent_size()), out_dim).to(device)
-        self.linear.weight.requires_grad = True
-        self.linear.bias.requires_grad = True
+        self.linear1 = torch.nn.Sequential(
+            torch.nn.Linear(np.prod(latent_size()), 128),
+            torch.nn.BatchNorm1d(128),
+            torch.nn.SELU()
+        ).to(device)
+
+        self.linear2 = torch.nn.Sequential(
+            torch.nn.Linear(128, 128),
+            torch.nn.BatchNorm1d(128),
+            torch.nn.SELU()
+        ).to(device)
+
+        self.linear3 = torch.nn.Sequential(
+            torch.nn.Linear(128, out_dim),
+            torch.nn.Softmax()
+        ).to(device)
 
         self.optim = opt(self.parameters(), **opt_param)
-        self.crit = loss().to(device)
+        self.crit = torch.nn.NLLLoss().to(device)
 
     def forward(self, x):
         for layer in self.layers:
             x = layer(x)
-        x = self.linear(x.view(x.shape[0], -1))
+        x = x.view(x.shape[0], -1)
+        x = self.linear1(x)
+        x = self.linear2(x)
+        x = self.linear3(x)
         return x
 
     def learn(self, x, labels):
         y = self.forward(x)
 
         self.optim.zero_grad()
-        loss = self.crit(y, labels)
+        loss = self.crit(y, labels.argmax(1))
         loss.backward()
         self.optim.step()
 
@@ -98,7 +115,7 @@ class ReferenceConvNetwork(torch.nn.Module):
 class ConvNetwork(torch.nn.Module):
     def __init__(self, args, im_dims, batch_size, convs,
                  target_size, act,
-                 loss, opt, opt_param,
+                 loss, opt, opt_param, learning_rates,
                  DCLLSlice=DCLLClassification,
                  burnin=50
                  ):
@@ -137,6 +154,10 @@ class ConvNetwork(torch.nn.Module):
 
         self.dcll_slices = []
         for i, layer in enumerate(self.layers):
+            layer_opt_param = opt_param.copy()
+            if learning_rates is not None:
+                lr_idx = min(i, len(learning_rates) - 1)
+                layer_opt_param['lr'] = learning_rates[lr_idx]
             name = 'conv%d' % i
             self.dcll_slices.append(
                 DCLLSlice(
@@ -145,7 +166,7 @@ class ConvNetwork(torch.nn.Module):
                     batch_size=batch_size,
                     loss=loss,
                     optimizer=opt,
-                    kwargs_optimizer=opt_param,
+                    kwargs_optimizer=layer_opt_param,
                     collect_stats=True,
                     burnin=burnin)
             )

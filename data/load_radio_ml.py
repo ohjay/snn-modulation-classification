@@ -13,7 +13,7 @@ class RadioMLDataset(data.Dataset):
     """
 
     def __init__(self, data_dir, train,
-                 normalize=True, min_snr=6, per_h5_frac=0.2, train_frac=0.9):
+                 normalize=True, min_snr=6, max_snr=30, per_h5_frac=0.5, train_frac=0.9):
 
         self.train = train
 
@@ -22,14 +22,15 @@ class RadioMLDataset(data.Dataset):
         else:
             print("Load test set")
 
-        if os.path.exists('test_y.npy'):
+        if os.path.exists('test_y_{}_{}_{}_{}.npy'.format(min_snr, max_snr, per_h5_frac, train_frac)):
+
             print("Start loading from npy file")
             if train:
-                self.X = np.load('train_x.npy')
-                self.Y = np.load('train_y.npy')
+                self.X = np.load('train_x_{}_{}_{}_{}.npy'.format(min_snr, max_snr, per_h5_frac, train_frac))
+                self.Y = np.load('train_y_{}_{}_{}_{}.npy'.format(min_snr, max_snr, per_h5_frac, train_frac))
             else:
-                self.X = np.load('test_x.npy')
-                self.Y = np.load('test_y.npy')
+                self.X = np.load('test_x_{}_{}_{}_{}.npy'.format(min_snr, max_snr, per_h5_frac, train_frac))
+                self.Y = np.load('test_y_{}_{}_{}_{}.npy'.format(min_snr, max_snr, per_h5_frac, train_frac))
             print("Data loaded from npy file")
             return
 
@@ -82,7 +83,7 @@ class RadioMLDataset(data.Dataset):
         # The data for each (class, SNR) pair
         # will be truncated to the first PER_H5_SIZE examples
         per_h5_size = int(per_h5_frac * 4096)
-        snr_count = (30 - min_snr) // 2 + 1
+        snr_count = (max_snr - min_snr) // 2 + 1
         train_split_size = int(train_frac * per_h5_size)
         if train:
             split_size = train_split_size
@@ -94,7 +95,7 @@ class RadioMLDataset(data.Dataset):
         self.Y = np.zeros(total_size, dtype=np.int64)
         for class_idx in range(24):
             print("Load class {}".format(class_idx))
-            for snr_idx, snr in enumerate(range(min_snr, 32, 2)):
+            for snr_idx, snr in enumerate(range(min_snr, max_snr + 2, 2)):
                 class_snr_name = 'class%d_snr%d.hdf5' % (class_idx, snr)
                 h5f_path = os.path.join(data_dir, class_snr_name)
                 h5f = h5py.File(h5f_path, 'r')
@@ -121,11 +122,11 @@ class RadioMLDataset(data.Dataset):
 
         print("Save to npy file")
         if train:
-            np.save('train_x.npy', self.X)
-            np.save('train_y.npy', self.Y)
+            np.save('train_x_{}_{}_{}_{}.npy'.format(min_snr, max_snr, per_h5_frac, train_frac), self.X)
+            np.save('train_y_{}_{}_{}_{}.npy'.format(min_snr, max_snr, per_h5_frac, train_frac), self.Y)
         else:
-            np.save('test_x.npy', self.X)
-            np.save('test_y.npy', self.Y)
+            np.save('test_x_{}_{}_{}_{}.npy'.format(min_snr, max_snr, per_h5_frac, train_frac), self.X)
+            np.save('test_y_{}_{}_{}_{}.npy'.format(min_snr, max_snr, per_h5_frac, train_frac), self.Y)
 
         print("Saved npy")
 
@@ -138,8 +139,19 @@ class RadioMLDataset(data.Dataset):
 
 def get_radio_ml_loader(batch_size, train, taskid=0, **kwargs):
     data_dir = kwargs['data_dir']
-    dataset = RadioMLDataset(data_dir, train, normalize=False)
-    print('dataset size: %d' % len(dataset))
+    min_snr = kwargs.get('min_snr', 6)
+    max_snr = kwargs.get('max_snr', 30)
+    per_h5_frac = kwargs.get('per_h5_frac', 0.5)
+    train_frac = kwargs.get('train_frac', 0.9)
+    dataset = RadioMLDataset(data_dir, train,
+                             normalize=False,
+                             min_snr=min_snr,
+                             max_snr=max_snr,
+                             per_h5_frac=per_h5_frac,
+                             train_frac=train_frac)
+
+    identifier = 'train' if train else 'test'
+    print('[%s] dataset size: %d' % (identifier, len(dataset)))
 
     loader = DataLoader(dataset=dataset,
                         batch_size=batch_size,

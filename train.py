@@ -22,10 +22,20 @@ def parse_args():
                         choices=['MNIST', 'RadioML'], help='which data to use')
     parser.add_argument('--radio_ml_data_dir', type=str, default='2018.01',
                         help='path to the folder containing the RadioML HDF5 file(s)')
+    parser.add_argument('--min_snr', type=int, default=6,
+                        metavar='N', help='minimum SNR (inclusive) to use during data loading')
+    parser.add_argument('--max_snr', type=int, default=30,
+                        metavar='N', help='maximum SNR (inclusive) to use during data loading')
+    parser.add_argument('--per_h5_frac', type=float, default=0.5,
+                        metavar='N', help='fraction of each HDF5 data file to use')
+    parser.add_argument('--train_frac', type=float, default=0.9,
+                        metavar='N', help='train split (1-TRAIN_FRAC is the test split)')
     parser.add_argument('--network_spec', type=str, default='networks/radio_ml_conv.yaml',
                         metavar='S', help='path to YAML file describing net architecture')
     parser.add_argument('--ref_network_spec', type=str, default='networks/radio_ml_conv_ref.yaml',
                         metavar='S', help='path to YAML file describing reference net architecture')
+    parser.add_argument('--just_ref', action='store_true',
+                        help='whether we want to just train the reference network')
     parser.add_argument('--I_resolution', type=int, default=128,
                         metavar='N', help='size of I dimension (used when representing I/Q plane as image)')
     parser.add_argument('--Q_resolution', type=int, default=128,
@@ -52,16 +62,18 @@ def parse_args():
                         metavar='N', help='how many steps to run before testing')
     parser.add_argument('--n_test_samples', type=int, default=128,
                         metavar='N', help='how many test samples to use')
-    parser.add_argument('--n_iters', type=int, default=500, metavar='N',
+    parser.add_argument('--n_iters', type=int, default=1024, metavar='N',
                         help='for how many ms do we present a sample during classification')
-    parser.add_argument('--n_iters_test', type=int, default=1500, metavar='N',
+    parser.add_argument('--n_iters_test', type=int, default=1024, metavar='N',
                         help='for how many ms do we present a sample during classification')
-    parser.add_argument('--optim_type', type=str, default='Adamax',
+    parser.add_argument('--optim_type', type=str, default='Adam',
                         metavar='S', help='which optimizer to use')
     parser.add_argument('--loss_type', type=str, default='SmoothL1Loss',
                         metavar='S', help='which loss function to use')
-    parser.add_argument('--lr', type=float, default=2.5e-8,
-                        metavar='N', help='learning rate for Adamax')
+    parser.add_argument('--learning_rates', type=float, default=[1e-6],
+                        nargs='+', metavar='N', help='learning rates for each DCLL slice')
+    parser.add_argument('--ref_lr', type=float, default=1e-3,
+                        metavar='N', help='learning rate for reference network')
     parser.add_argument('--alpha', type=float, default=.92,
                         metavar='N', help='Time constant for neuron')
     parser.add_argument('--alphas', type=float, default=.85,
@@ -92,11 +104,18 @@ if __name__ == '__main__':
 
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
     log_dir = os.path.join('runs', args.data, current_time)
+    writer = SummaryWriter(log_dir=log_dir, comment='%s Conv' % args.data)
     print('log dir: {log_dir}'.format(log_dir=log_dir))
+    out_dir = os.path.join(args.output, args.data, current_time)
+    os.makedirs(out_dir)
+    print('out dir: {out_dir}'.format(out_dir=out_dir))
 
     get_loader_kwargs  = {}
     to_st_train_kwargs = {}
     to_st_test_kwargs  = {}
+
+    n_iters = args.n_iters
+    n_iters_test = args.n_iters_test
 
     if args.data == 'MNIST':
         im_dims = (1, 28, 28)
@@ -105,8 +124,6 @@ if __name__ == '__main__':
         from data.load_mnist import get_mnist_loader as get_loader
         from data.utils import image2spiketrain as to_spike_train
         # Set "to spike train" kwargs
-        n_iters = args.n_iters
-        n_iters_test = args.n_iters_test
         for to_st_kwargs in (to_st_train_kwargs, to_st_test_kwargs):
             to_st_kwargs['input_shape'] = im_dims
             to_st_kwargs['gain'] = 100
@@ -123,9 +140,11 @@ if __name__ == '__main__':
         from data.utils import iq2spiketrain as to_spike_train
         # Set "get loader" kwargs
         get_loader_kwargs['data_dir'] = args.radio_ml_data_dir
+        get_loader_kwargs['min_snr'] = args.min_snr
+        get_loader_kwargs['max_snr'] = args.max_snr
+        get_loader_kwargs['per_h5_frac'] = args.per_h5_frac
+        get_loader_kwargs['train_frac'] = args.train_frac
         # Set "to spike train" kwargs
-        n_iters = 1024
-        n_iters_test = 1024
         for to_st_kwargs in (to_st_train_kwargs, to_st_test_kwargs):
             to_st_kwargs['out_w'] = args.I_resolution
             to_st_kwargs['out_h'] = args.Q_resolution
@@ -133,55 +152,61 @@ if __name__ == '__main__':
             to_st_kwargs['max_I'] = args.I_bounds[1]
             to_st_kwargs['min_Q'] = args.Q_bounds[0]
             to_st_kwargs['max_Q'] = args.Q_bounds[1]
-            to_st_kwargs['max_duration'] = n_iters
+        to_st_train_kwargs['max_duration'] = n_iters
+        to_st_test_kwargs['max_duration'] = n_iters_test
 
     # number of test samples: n_test * batch_size_test
     n_test = np.ceil(float(args.n_test_samples) /
                      args.batch_size_test).astype(int)
+    n_tests_total = np.ceil(float(args.n_steps) /
+                            args.n_test_interval).astype(int)
 
     opt = getattr(torch.optim, args.optim_type)
-    opt_param = {'lr': args.lr, 'betas': [.0, args.beta]}
+    opt_param = {'betas': [0.0, args.beta]}
+    ref_opt_param = {'lr': args.ref_lr, 'betas': [0.0, args.beta]}
     loss = getattr(torch.nn, args.loss_type)
 
-    burnin = args.burnin
-    convs = load_network_spec(args.network_spec)
-    net = ConvNetwork(args, im_dims, args.batch_size, convs, target_size,
-                      act=torch.nn.Sigmoid(), loss=loss, opt=opt, opt_param=opt_param, burnin=burnin)
+    if not args.just_ref:
+        burnin = args.burnin
+        convs = load_network_spec(args.network_spec)
+        net = ConvNetwork(args, im_dims, args.batch_size, convs, target_size,
+                          act=torch.nn.Sigmoid(), loss=loss, opt=opt, opt_param=opt_param,
+                          learning_rates=args.learning_rates, burnin=burnin)
 
-    if args.restore_path:
-        print('-' * 80)
-        if not os.path.isfile(args.restore_path):
-            print('ERROR: Cannot load `%s`.' % args.restore_path)
-            print('File does not exist! Aborting load...')
-        else:
-            state_dict = torch.load(args.restore_path)
-            net.load_state_dict(state_dict)
-            print('Loaded the SNN model from `%s`.' % args.restore_path)
-        print('-' * 80)
+        if args.restore_path:
+            print('-' * 80)
+            if not os.path.isfile(args.restore_path):
+                print('ERROR: Cannot load `%s`.' % args.restore_path)
+                print('File does not exist! Aborting load...')
+            else:
+                state_dict = torch.load(args.restore_path)
+                net.load_state_dict(state_dict)
+                print('Loaded the SNN model from `%s`.' % args.restore_path)
+            print('-' * 80)
 
-    net = net.to(device)
-    net.reset(True)
+        net = net.to(device)
+        net.reset(True)
+        acc_test = np.empty([n_tests_total, n_test, len(net.dcll_slices)])
+
+        dumper = NetworkDumper(writer, net)
 
     ref_convs = load_network_spec(args.ref_network_spec)
-    ref_net = ReferenceConvNetwork(args, ref_im_dims, ref_convs, loss, opt, opt_param, target_size)
+    ref_net = ReferenceConvNetwork(args, ref_im_dims, ref_convs, loss, opt, ref_opt_param, target_size)
     ref_net = ref_net.to(device)
-
-    writer = SummaryWriter(log_dir=log_dir, comment='%s Conv' % args.data)
-    dumper = NetworkDumper(writer, net)
+    acc_test_ref = np.empty([n_tests_total, n_test])
 
     if not args.no_save:
-        out_dir = os.path.join(args.output, args.data)
-        d = mksavedir(pre=out_dir)
-        annotate(d, text=log_dir, filename='log_filename.txt')
-        annotate(d, text=str(args), filename='args.txt')
-        with open(os.path.join(d, 'args.pkl'), 'wb') as fp:
+        annotate(out_dir, text=log_dir, filename='log_dir.txt')
+        annotate(out_dir, text=str(args), filename='args.txt')
+        with open(os.path.join(out_dir, 'args.pkl'), 'wb') as fp:
             pickle.dump(vars(args), fp)
-        save_source(d)
+
+        save_source(out_dir)
 
         print(args)
 
         # Log python commit
-        commit_logfile = open(os.path.join(d, 'current_commit.txt'), 'w')
+        commit_logfile = open(os.path.join(out_dir, 'current_commit.txt'), 'w')
         commit_msg = subprocess.check_output('git log -1', shell=True)
         commit_logfile.write(commit_msg.decode('utf-8'))
         commit_logfile.close()
@@ -205,9 +230,10 @@ if __name__ == '__main__':
         print("Minibatch step {}".format(step))
         start = time.time()
         if ((step + 1) % 1000) == 0:
-            for i in range(len(net.dcll_slices)):
-                net.dcll_slices[i].optimizer.param_groups[-1]['lr'] /= 2
-            net.dcll_slices[-1].optimizer2.param_groups[-1]['lr'] /= 2
+            if not args.just_ref:
+                for i in range(len(net.dcll_slices)):
+                    net.dcll_slices[i].optimizer.param_groups[-1]['lr'] /= 2
+                net.dcll_slices[-1].optimizer2.param_groups[-1]['lr'] /= 2
             ref_net.optim.param_groups[-1]['lr'] /= 2
             print('Adjusting learning rates')
 
@@ -219,10 +245,19 @@ if __name__ == '__main__':
         labels = to_one_hot(labels, target_size)
 
         print("Before to_spike_train {}".format(time.time() - start))
-        input_spikes, labels_spikes = to_spike_train(input, labels,
-                                                     **to_st_train_kwargs)
-        input_spikes = torch.Tensor(input_spikes).to(device)
-        labels_spikes = torch.Tensor(labels_spikes).to(device)
+
+        if not args.just_ref:
+            input_spikes, labels_spikes = to_spike_train(input, labels,
+                                                         **to_st_train_kwargs)
+            input_spikes = torch.Tensor(input_spikes).to(device)
+            labels_spikes = torch.Tensor(labels_spikes).to(device)
+
+            # Train
+            net.reset()
+            net.train()
+            for sim_iteration in range(n_iters):
+                net.learn(x=input_spikes[sim_iteration],
+                          labels=labels_spikes[sim_iteration])
 
         ref_input = torch.Tensor(input).to(device).reshape(-1, *ref_im_dims)
         ref_label = torch.Tensor(labels).to(device)
@@ -231,19 +266,20 @@ if __name__ == '__main__':
         # Train
         net.reset()
         net.train()
-        ref_net.train()
         for sim_iteration in range(n_iters):
             if (sim_iteration % 50 == 0):
                 print("Iteration {} time: {}:".format(sim_iteration, time.time() - start))
             net.learn(x=input_spikes[sim_iteration],
                       labels=labels_spikes[sim_iteration])
-            ref_net.learn(x=ref_input, labels=ref_label)
+
+        ref_net.train()
+        ref_net.learn(x=ref_input, labels=ref_label)
 
         acc = net.accuracy(labels_spikes)
         print("Step {} Training accuracy: {}".format(step, acc))
 
         if not args.no_save:
-            logfile = open(os.path.join(d, 'logfile-train-accuracy.txt'), 'a')
+            logfile = open(os.path.join(out_dir, 'logfile-train-accuracy.txt'), 'a')
             logfile.write('Step {} \t Accuracy {} \n'.format(step, acc))
             logfile.close()
 
@@ -251,51 +287,57 @@ if __name__ == '__main__':
         if (step % args.n_test_interval) == 0:
             test_idx = step // args.n_test_interval
             for i, test_data in enumerate(all_test_data):
-                test_input, test_labels = to_spike_train(*test_data,
-                                                         **to_st_test_kwargs)
-                try:
-                    test_input = torch.Tensor(test_input).to(device)
-                except RuntimeError as e:
-                    print('Exception: ' + str(e) +
-                          '. Try to decrease your batch_size_test with the --batch_size_test argument.')
-                    raise
+                if not args.just_ref:
+                    test_input, test_labels = to_spike_train(*test_data,
+                                                             **to_st_test_kwargs)
+                    try:
+                        test_input = torch.Tensor(test_input).to(device)
+                    except RuntimeError as e:
+                        print('Exception: ' + str(e) +
+                              '. Try to decrease your batch_size_test with the --batch_size_test argument.')
+                        raise
+                    test_labels1h = torch.Tensor(test_labels).to(device)
 
-                test_labels1h = torch.Tensor(test_labels).to(device)
+                    net.reset()
+                    net.eval()
+                    for sim_iteration in range(n_iters_test):
+                        net.test(x=test_input[sim_iteration])
+                    acc_test[test_idx, i, :] = net.accuracy(test_labels1h)
+
+                    if i == 0:
+                        net.write_stats(writer, step, comment='_batch_'+str(i))
+
                 test_ref_input = torch.Tensor(test_data[0]).to(device).reshape(-1, *ref_im_dims)
                 test_ref_label = torch.Tensor(test_data[1]).to(device)
 
-                net.reset()
-                net.eval()
                 ref_net.eval()
-                for sim_iteration in range(n_iters_test):
-                    net.test(x=test_input[sim_iteration])
-
                 ref_net.test(test_ref_input)
-
-                acc_test[test_idx, i, :] = net.accuracy(test_labels1h)
                 acc_test_ref[test_idx, i] = ref_net.accuracy(test_ref_label)
 
                 if i == 0:
-                    net.write_stats(writer, step, comment='_batch_'+str(i))
                     ref_net.write_stats(writer, step)
 
-            if not args.no_save:
-                np.save(d + '/acc_test.npy', acc_test)
-                np.save(d + '/acc_test_ref.npy', acc_test_ref)
+            if not args.just_ref and not args.no_save:
+                np.save(os.path.join(out_dir, 'acc_test.npy'), acc_test)
+                np.save(os.path.join(out_dir, 'acc_test_ref.npy'), acc_test_ref)
 
                 # Save network parameters
-                save_path = os.path.join(d, 'parameters_{}.pth'.format(step))
+                save_path = os.path.join(out_dir, 'parameters_{}.pth'.format(step))
                 torch.save(net.cpu().state_dict(), save_path)
                 net = net.to(device)
                 print('-' * 80)
                 print('Saved network parameters to `%s`.' % save_path)
                 print('-' * 80)
 
-            acc = np.mean(acc_test[test_idx], axis=0)
+            if not args.just_ref:
+                acc = np.mean(acc_test[test_idx], axis=0)
+            else:
+                acc = 'N/A'
             acc_ref = np.mean(acc_test_ref[test_idx], axis=0)
+
             print('Step {} \t Accuracy {} \t Ref {}'.format(step, acc, acc_ref))
             if not args.no_save:
-                logfile = open(os.path.join(d, 'logfile-accuracy.txt'), 'a')
+                logfile = open(os.path.join(out_dir, 'logfile-accuracy.txt'), 'a')
                 logfile.write('Step {} \t Accuracy {} \t Ref {}\n'.format(step, acc, acc_ref))
                 logfile.close()
 
