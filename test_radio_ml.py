@@ -15,6 +15,10 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--radio_ml_data_dir', type=str, default='2018.01',
                         help='path to the folder containing the RadioML HDF5 file(s)')
+    parser.add_argument('--per_h5_frac', type=float, default=0.5,
+                        metavar='N', help='fraction of each HDF5 data file to use')
+    parser.add_argument('--train_frac', type=float, default=0.9,
+                        metavar='N', help='train split (1-TRAIN_FRAC is the test split)')
     parser.add_argument('--network_spec', type=str, default='networks/radio_ml_conv.yaml',
                         metavar='S', help='path to YAML file describing net architecture')
     parser.add_argument('--I_resolution', type=int, default=128,
@@ -109,6 +113,8 @@ if __name__ == '__main__':
                 'data_dir': args.radio_ml_data_dir,
                 'min_snr': snr,
                 'max_snr': snr,
+                'per_h5_frac': args.per_h5_frac,
+                'train_frac': args.train_frac,
             }
             gen_test = iter(get_loader(args.batch_size_test, train=False, taskid=1, **get_loader_kwargs))
             all_test_data = [next(gen_test) for i in range(n_test)]
