@@ -157,9 +157,11 @@ if __name__ == '__main__':
         accs = np.stack(accs, axis=1)
         fig = plt.figure(figsize=(15, 5))
         ax = fig.add_subplot(111)
-        ax.bar(snrs + 0.00, accs[0], color='gold', width=0.25, label='layer 1')
-        ax.bar(snrs + 0.25, accs[1], color='royalblue', width=0.25, label='layer 2')
-        ax.bar(snrs + 0.50, accs[2], color='limegreen', width=0.25, label='layer 3')
+        colors = ['gold', 'royalblue', 'limegreen', 'mediumorchid', 'tomato', 'lightsteelblue']
+        for i in range(accs.shape[0]):
+            color = colors[i % len(colors)]
+            layer_label = 'layer {i}'.format(i=i+1)
+            ax.bar(snrs + 0.25 * i, accs[i], color=color, width=0.25, label=layer_label)
         ax.set_xlabel('SNR')
         ax.set_ylabel('Accuracy')
         ax.set_xticks(snrs)
