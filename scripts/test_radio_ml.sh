@@ -1,6 +1,7 @@
 #!/bin/bash
 
-radio_ml_data_dir="/media/owen/ba9d40b5-89de-4832-bad4-156b118e4a66/2018.01"
+radio_ml_data_dir="/lif/radioml/2018.01/"
+
 I_resolution=16
 Q_resolution=16
 min_I=-1.0
@@ -9,7 +10,7 @@ min_Q=-1.0
 max_Q=1.0
 
 network_spec="networks/radio_ml_conv.yaml"
-restore_path="results/RadioML/068__07-05-2020/parameters_180.pth"
+restore_path="results/RadioML/May27_10-27-24/parameters_380.pth"
 
 burnin=20
 n_iters_test=1024

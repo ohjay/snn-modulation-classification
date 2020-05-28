@@ -560,11 +560,11 @@ class QuantConv2dDCLLlayer(nn.Module):
                                                           stride=stride, alpha=alpha, alphas=alphas, alpharp=alpharp, wrp=wrp, act=act, random_tau=random_tau)
         else:
             if forward_state_quantized:
-                print("[Use QuantContinuousConv2DState")
+                print("[Use QuantContinuousConv2DState]")
                 self.i2h = QuantContinuousConv2DState(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
                                         stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau, weight_bit_width=weight_bit_width, eps0_bit_width=eps0_bit_width, eps1_bit_width=eps1_bit_width)
             else:
-                print("[Use QuantContinuousConv2D")
+                print("[Use QuantContinuousConv2D]")
                 self.i2h = QuantContinuousConv2D(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation,
                                         stride=stride, alpha=alpha, alphas=alphas, act=act, spiking=spiking, random_tau=random_tau, weight_bit_width=weight_bit_width)
         conv_shape = self.i2h.get_output_shape(self.im_dims)

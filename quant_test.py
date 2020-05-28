@@ -233,8 +233,6 @@ if __name__ == '__main__':
     acc_test = np.empty([n_tests_total, n_test, len(net.dcll_slices)])
     acc_test_ref = np.empty([n_tests_total, n_test])
 
-    train_data = get_loader(args.batch_size, train=True, taskid=0, **get_loader_kwargs)
-    gen_train = iter(train_data)
     gen_test = iter(get_loader(args.batch_size_test, train=False, taskid=1, **get_loader_kwargs))
 
     all_test_data = [next(gen_test) for i in range(n_test)]
@@ -279,14 +277,6 @@ if __name__ == '__main__':
             if not args.just_ref and not args.no_save:
                 np.save(os.path.join(out_dir, 'acc_test.npy'), acc_test)
                 np.save(os.path.join(out_dir, 'acc_test_ref.npy'), acc_test_ref)
-
-                # Save network parameters
-                save_path = os.path.join(out_dir, 'parameters_{}.pth'.format(step))
-                torch.save(net.cpu().state_dict(), save_path)
-                net = net.to(device)
-                print('-' * 80)
-                print('Saved network parameters to `%s`.' % save_path)
-                print('-' * 80)
 
             if not args.just_ref:
                 acc = np.mean(acc_test[test_idx], axis=0)

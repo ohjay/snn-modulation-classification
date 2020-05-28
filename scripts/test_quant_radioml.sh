@@ -34,8 +34,8 @@ learning_rates=(0.000000025)
 ref_lr=0.001
 
 weight_bit_width=8
-eps0_bit_width=8
-eps1_bit_width=8
+eps0_bit_width=24
+eps1_bit_width=24
 
 forward_state_quantized="True"
 
@@ -66,4 +66,5 @@ python -u quant_test.py \
     --eps0_bit_width $eps0_bit_width \
     --eps1_bit_width $eps1_bit_width \
     --restore_path $restore_path \
-    --forward_state_quantized $forward_state_quantized
+
+    #--forward_state_quantized $forward_state_quantized

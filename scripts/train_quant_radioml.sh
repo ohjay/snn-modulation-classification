@@ -31,7 +31,7 @@ n_test_samples=512
 learning_rates=(0.000000025)
 ref_lr=0.001
 
-weight_bit_width=8
+weight_bit_width=2
 
 # -u to immediately print to stdout (for file redirect to see output before script ends)
 python -u quant_train.py \
