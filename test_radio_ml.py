@@ -3,6 +3,7 @@ import numpy as np
 import os
 import argparse
 import time
+import matplotlib.pyplot as plt
 
 from dcll.pytorch_libdcll import device
 from networks import ConvNetwork, load_network_spec
@@ -107,7 +108,9 @@ if __name__ == '__main__':
         net = net.to(device)
         net.reset(True)
 
-        for snr in range(6, 32, 2):
+        accs = []
+        snrs = np.array(range(6, 32, 2))
+        for snr in snrs:
             start_time = time.time()
             get_loader_kwargs  = {
                 'data_dir': args.radio_ml_data_dir,
@@ -143,3 +146,25 @@ if __name__ == '__main__':
             time_elapsed = (time.time() - start_time)
             time_elapsed = '%.2f s' % time_elapsed
             print_and_log('SNR {} \t Accuracy {} \t Time Elapsed {}'.format(str(snr).zfill(2), acc, time_elapsed))
+            accs.append(acc)
+
+        # Save accuracies as NPY file
+        npy_out_path = os.path.join(out_dir, 'snr_evaluation_accs.npy')
+        np.save(npy_out_path, accs)
+        print_and_log('Wrote `%s`.' % npy_out_path)
+
+        # Plot results on bar chart
+        accs = np.stack(accs, axis=1)
+        fig = plt.figure(figsize=(15, 5))
+        ax = fig.add_subplot(111)
+        ax.bar(snrs + 0.00, accs[0], color='gold', width=0.25, label='layer 1')
+        ax.bar(snrs + 0.25, accs[1], color='royalblue', width=0.25, label='layer 2')
+        ax.bar(snrs + 0.50, accs[2], color='limegreen', width=0.25, label='layer 3')
+        ax.set_xlabel('SNR')
+        ax.set_ylabel('Accuracy')
+        ax.set_xticks(snrs)
+        ax.legend()
+        fig_out_path = 'results_%s.png' % os.path.basename(os.path.dirname(args.restore_path))
+        plt.savefig(fig_out_path)
+        print_and_log('Wrote `%s`.' % fig_out_path)
+        plt.show()
