@@ -4,7 +4,7 @@ data="RadioML"
 
 radio_ml_data_dir="/lif/radioml/2018.01/"
 
-restore_path="results/RadioML/May27_13-48-53/parameters_95.pth"
+restore_path="results/RadioML/May27_13-31-59/parameters_150.pth"
 
 min_snr=6
 max_snr=30
@@ -34,8 +34,8 @@ learning_rates=(0.000000025)
 ref_lr=0.001
 
 weight_bit_width=8
-eps0_bit_width=24
-eps1_bit_width=24
+eps0_bit_width=8
+eps1_bit_width=8
 
 forward_state_quantized="True"
 
@@ -66,5 +66,4 @@ python -u quant_test.py \
     --eps0_bit_width $eps0_bit_width \
     --eps1_bit_width $eps1_bit_width \
     --restore_path $restore_path \
-
-    #--forward_state_quantized $forward_state_quantized
+    --forward_state_quantized $forward_state_quantized

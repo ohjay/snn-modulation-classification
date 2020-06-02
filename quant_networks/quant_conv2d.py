@@ -312,7 +312,7 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
 
         self.eps0_quant_identity = QuantIdentity(bit_width = eps0_bit_width,
                  min_val = 0,
-                 max_val = 100,
+                 max_val = 150,
                  narrow_range = False,
                  quant_type = QuantType.INT,
                  float_to_int_impl_type = FloatToIntImplType.ROUND,
@@ -336,7 +336,7 @@ class QuantContinuousConv2DState(QuantContinuousConv2D):
 
         self.eps1_quant_identity = QuantIdentity(bit_width = eps1_bit_width,
                  min_val = 0,
-                 max_val = 20000,
+                 max_val = 100000,
                  narrow_range = False,
                  quant_type = QuantType.INT,
                  float_to_int_impl_type = FloatToIntImplType.ROUND,
