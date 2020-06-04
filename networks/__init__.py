@@ -194,3 +194,6 @@ class ConvNetwork(torch.nn.Module):
 
     def accuracy(self, labels):
         return [s.accuracy(labels) for s in self.dcll_slices]
+
+    def confusion_matrix(self, labels):
+        return self.dcll_slices[-1].confusion_matrix(labels)

@@ -58,6 +58,7 @@ def parse_args():
                         metavar='N', help='magnitude of local classifier init')
     parser.add_argument('--netscale', type=float, default=1.,
                         metavar='N', help='scale network size')
+    parser.add_argument('--print_all_confusion_matrices', action='store_true')
     return parser.parse_args()
 
 
@@ -110,6 +111,7 @@ if __name__ == '__main__':
 
         accs = []
         snrs = np.array(range(6, 32, 2))
+        total_confusion_matrix = np.zeros((target_size, target_size), dtype=int)
         for snr in snrs:
             start_time = time.time()
             get_loader_kwargs  = {
@@ -126,6 +128,7 @@ if __name__ == '__main__':
 
             # Test
             acc_test = np.zeros([n_test, len(net.dcll_slices)])
+            confusion_matrix = np.zeros((target_size, target_size), dtype=int)
             for i, test_data in enumerate(all_test_data):
                 test_input, test_labels = to_spike_train(*test_data, **to_st_test_kwargs)
                 try:
@@ -141,12 +144,25 @@ if __name__ == '__main__':
                 for sim_iteration in range(args.n_iters_test):
                     net.test(x=test_input[sim_iteration])
                 acc_test[i, :] = net.accuracy(test_labels1h)
+                confusion_matrix += net.confusion_matrix(test_labels1h)
 
             acc = np.mean(acc_test, axis=0)
             time_elapsed = (time.time() - start_time)
             time_elapsed = '%.2f s' % time_elapsed
             print_and_log('SNR {} \t Accuracy {} \t Time Elapsed {}'.format(str(snr).zfill(2), acc, time_elapsed))
+            if args.print_all_confusion_matrices:
+                print_and_log('Confusion matrix:')
+                print_and_log(np.array2string(confusion_matrix))
+            confusion_matrix_out_path = os.path.join(out_dir, 'confusion_matrix_snr_%d.npy' % snr)
+            np.save(confusion_matrix_out_path, confusion_matrix)
             accs.append(acc)
+            total_confusion_matrix += confusion_matrix
+
+        print_and_log('---\nTotal confusion matrix:')
+        print_and_log(np.array2string(total_confusion_matrix))
+        plt.imsave(os.path.join(out_dir, 'total_confusion_matrix.png'), total_confusion_matrix)
+        plt.imshow(total_confusion_matrix)
+        plt.show()
 
         # Save accuracies as NPY file
         npy_out_path = os.path.join(out_dir, 'snr_evaluation_accs.npy')

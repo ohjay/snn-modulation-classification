@@ -25,6 +25,9 @@ from apex import amp
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+import sys
+np.set_printoptions(threshold=sys.maxsize)
+
 # if gpu is to be used
 soft_threshold = torch.sigmoid
 
@@ -38,16 +41,24 @@ def adjust_learning_rate(optimizer, epoch, base_lr=5e-5):
         param_group['lr'] = lr
 
 
-def accuracy_by_vote(pvoutput, labels):
+def get_predictions_by_vote(pvoutput, labels):
     pvoutput_ = np.array(pvoutput).T
     n = len(pvoutput_)
-    arr = np.empty(n)
-    arrl = np.empty(n)
+    predictions_by_vote = np.empty(n)
+    labels_by_vote = np.empty(n)
     labels_ = labels.cpu().numpy().argmax(axis=2).T
     for i in range(n):
-        arr[i] = Counter(pvoutput_[i]).most_common(1)[0][0]
-        arrl[i] = Counter(labels_[i]).most_common(1)[0][0]
-    return float(np.mean((arr == arrl)))
+        predictions_by_vote[i] = Counter(pvoutput_[i]).most_common(1)[0][0]
+        labels_by_vote[i] = Counter(labels_[i]).most_common(1)[0][0]
+        # print(pvoutput_[i])
+        # print(predictions_by_vote[i], labels_by_vote[i])
+        # sys.exit(0)
+    return predictions_by_vote, labels_by_vote
+
+
+def accuracy_by_vote(pvoutput, labels):
+    predictions_by_vote, labels_by_vote = get_predictions_by_vote(pvoutput, labels)
+    return float(np.mean((predictions_by_vote == labels_by_vote)))
 
 
 def accuracy_by_mean(pvoutput, labels):
@@ -725,6 +736,17 @@ class DCLLClassification(DCLLBase):
         begin = len(self.clout)
         self.acc = accuracy_by_vote(self.clout, targets[-begin:])
         return self.acc
+
+    def confusion_matrix(self, targets):
+        begin = len(self.clout)
+        predictions_by_vote, labels_by_vote = \
+            get_predictions_by_vote(self.clout, targets[-begin:])
+        num_classes = self.dclllayer.target_size
+        confusion_matrix = np.zeros((num_classes, num_classes), dtype=int)
+        for prediction, label in zip(predictions_by_vote, labels_by_vote):
+            prediction, label = int(prediction), int(label)
+            confusion_matrix[prediction, label] += 1
+        return confusion_matrix
 
 
 class DCLLRegression(DCLLBase):
