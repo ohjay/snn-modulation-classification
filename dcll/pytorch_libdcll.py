@@ -37,6 +37,14 @@ def adjust_learning_rate(optimizer, epoch, base_lr=5e-5):
         param_group['lr'] = lr
 
 
+def prediction_by_vote(pvoutput):
+    pvoutput_ = np.array(pvoutput).T
+    n = len(pvoutput_)
+    arr = np.empty(n)
+    for i in range(n):
+        arr[i] = Counter(pvoutput_[i]).most_common(1)[0][0]
+    return arr
+
 def accuracy_by_vote(pvoutput, labels):
     pvoutput_ = np.array(pvoutput).T
     n = len(pvoutput_)
@@ -714,6 +722,9 @@ class DCLLClassification(DCLLBase):
         begin = len(self.clout)
         self.acc = accuracy_by_vote(self.clout, targets[-begin:])
         return self.acc
+
+    def predictions(self):
+        return prediction_by_vote(self.clout)
 
 
 class DCLLRegression(DCLLBase):

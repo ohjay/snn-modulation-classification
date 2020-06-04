@@ -192,3 +192,6 @@ class ConvNetwork(torch.nn.Module):
 
     def accuracy(self, labels):
         return [s.accuracy(labels) for s in self.dcll_slices]
+
+    def predictions(self):
+        return [s.predictions() for s in self.dcll_slices]
