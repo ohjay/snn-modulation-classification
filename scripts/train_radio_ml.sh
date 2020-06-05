@@ -22,10 +22,12 @@ n_iters_test=1024
 batch_size=512
 batch_size_test=512
 n_test_samples=512
-learning_rates=(0.000000025)
+n_test_interval=10
+learning_rates=(0.00000000025)
 ref_lr=0.001
+arp=1.0
 
-python train.py \
+python3 train.py \
     --data $data \
     --radio_ml_data_dir $radio_ml_data_dir \
     --min_snr $min_snr \
@@ -38,11 +40,13 @@ python train.py \
     --Q_bounds $min_Q $max_Q \
     --network_spec $network_spec \
     --ref_network_spec $ref_network_spec \
+    --arp $arp \
     --burnin $burnin \
     --n_iters $n_iters \
     --n_iters_test $n_iters_test \
     --batch_size $batch_size \
     --batch_size_test $batch_size_test \
     --n_test_samples $n_test_samples \
+    --n_test_interval $n_test_interval \
     --learning_rates "${learning_rates[@]/#/}" \
     --ref_lr $ref_lr
