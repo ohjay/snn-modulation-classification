@@ -152,15 +152,15 @@ if __name__ == '__main__':
             print_and_log('SNR {} \t Accuracy {} \t Time Elapsed {}'.format(str(snr).zfill(2), acc, time_elapsed))
             if args.print_all_confusion_matrices:
                 print_and_log('Confusion matrix:')
-                print_and_log(np.array2string(confusion_matrix))
+                print_and_log(np.array2string(confusion_matrix, max_line_width=300))
             confusion_matrix_out_path = os.path.join(out_dir, 'confusion_matrix_snr_%d.npy' % snr)
             np.save(confusion_matrix_out_path, confusion_matrix)
             accs.append(acc)
             total_confusion_matrix += confusion_matrix
 
         print_and_log('---\nTotal confusion matrix:')
-        print_and_log(np.array2string(total_confusion_matrix))
-        plt.imsave(os.path.join(out_dir, 'total_confusion_matrix.png'), total_confusion_matrix)
+        print_and_log(np.array2string(total_confusion_matrix, max_line_width=300))
+        plt.imsave(os.path.join(out_dir, 'total_confusion_matrix.png'), total_confusion_matrix, cmap='gray')
         plt.imshow(total_confusion_matrix)
         plt.show()
 

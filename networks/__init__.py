@@ -140,7 +140,7 @@ class ConvNetwork(torch.nn.Module):
                                     wrp=args.arp, act=act, lc_ampl=args.lc_ampl,
                                     random_tau=args.random_tau,
                                     spiking=True,
-                                    lc_dropout=.5,
+                                    lc_dropout=False,
                                     output_layer=is_output_layer
                                     ).to(device).init_hiddens(batch_size)
             return layer, torch.Size([layer.out_channels]) + layer.output_shape

@@ -16,15 +16,16 @@ max_Q=1.0
 network_spec="networks/radio_ml_conv.yaml"
 ref_network_spec="networks/radio_ml_conv_ref.yaml"
 
-burnin=900
+burnin=20
 n_iters=1024
 n_iters_test=1024
 batch_size=512
 batch_size_test=512
 n_test_samples=512
 n_test_interval=10
-learning_rates=(0.000000025)
+learning_rates=(0.00000000025)
 ref_lr=0.001
+arp=1.0
 
 python3 train.py \
     --data $data \
@@ -39,6 +40,7 @@ python3 train.py \
     --Q_bounds $min_Q $max_Q \
     --network_spec $network_spec \
     --ref_network_spec $ref_network_spec \
+    --arp $arp \
     --burnin $burnin \
     --n_iters $n_iters \
     --n_iters_test $n_iters_test \

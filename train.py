@@ -84,7 +84,7 @@ def parse_args():
                         help='randomize time constants in convolutional layers')
     parser.add_argument('--beta', type=float, default=.95,
                         metavar='N', help='Beta2 parameters for Adamax')
-    parser.add_argument('--lc_ampl', type=float, default=1.0,
+    parser.add_argument('--lc_ampl', type=float, default=0.5,
                         metavar='N', help='magnitude of local classifier init')
     parser.add_argument('--netscale', type=float, default=1.,
                         metavar='N', help='scale network size')
@@ -216,6 +216,7 @@ if __name__ == '__main__':
     all_test_data = [(samples, to_one_hot(labels, target_size))
                      for (samples, labels) in all_test_data]
 
+    label_train_counts = np.zeros(target_size, dtype=int)
     for step in range(args.n_steps):
         if ((step + 1) % 1000) == 0:
             if not args.just_ref:
@@ -230,6 +231,8 @@ if __name__ == '__main__':
         except StopIteration:
             gen_train = iter(train_data)
             input, labels = next(gen_train)
+        for label in labels:
+            label_train_counts[label] += 1
         labels = to_one_hot(labels, target_size)
 
         if not args.just_ref:
@@ -309,5 +312,8 @@ if __name__ == '__main__':
             acc_ref = np.mean(acc_test_ref[test_idx], axis=0)
             step_str = str(step).zfill(5)
             print('[TEST]  Step {} \t Accuracy {} \t Ref {}'.format(step_str, acc, acc_ref))
+            print('Label train percentages:')
+            label_train_percentages = label_train_counts / np.sum(label_train_counts) * 100
+            print(np.array2string(label_train_percentages, max_line_width=300, precision=1))
 
     writer.close()
