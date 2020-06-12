@@ -23,6 +23,9 @@ from dcll.pytorch_utils import grad_parameters, named_grad_parameters, NetworkDu
 from networks import ConvNetwork, ReferenceConvNetwork, load_network_spec
 from data.utils import to_one_hot
 
+import sklearn.metrics
+import matplotlib.pyplot as plt
+import seaborn as sn
 
 def parse_args():
     parser = argparse.ArgumentParser(description='DCLL')
@@ -234,6 +237,7 @@ if __name__ == '__main__':
         # Test
         if (step % args.n_test_interval) == 0:
             test_idx = step // args.n_test_interval
+            confusion = np.zeros((24,24))
             for i, test_data in enumerate(all_test_data):
                 if not args.just_ref:
                     test_input, test_labels = to_spike_train(*test_data,
@@ -251,6 +255,8 @@ if __name__ == '__main__':
                     for sim_iteration in range(n_iters_test):
                         net.test(x=test_input[sim_iteration])
                     acc_test[test_idx, i, :] = net.accuracy(test_labels1h)
+                    test_labels1h_int = test_labels1h[0,:].cpu().argmax(dim=1)
+                    confusion += sklearn.metrics.confusion_matrix(test_labels1h_int, net.predictions()[2])
 
                     if i == 0:
                         net.write_stats(writer, step, comment='_batch_'+str(i))
@@ -264,6 +270,10 @@ if __name__ == '__main__':
 
                 if i == 0:
                     ref_net.write_stats(writer, step)
+
+            sn.heatmap(confusion)
+            plt.show()
+            plt.savefig('confusion.png')
 
             if not args.just_ref and not args.no_save:
                 np.save(os.path.join(out_dir, 'acc_test.npy'), acc_test)

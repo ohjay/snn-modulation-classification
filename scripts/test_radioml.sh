@@ -10,7 +10,7 @@ min_Q=-1.0
 max_Q=1.0
 
 network_spec="networks/radio_ml_conv.yaml"
-restore_path="results/RadioML/May27_11-47-00/parameters_155.pth"
+restore_path="results/RadioML/Jun04_13-04-30/parameters_260.pth"
 
 burnin=20
 n_iters_test=1024
