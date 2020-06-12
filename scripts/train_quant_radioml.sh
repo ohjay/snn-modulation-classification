@@ -30,8 +30,9 @@ batch_size_test=512
 n_test_samples=512
 learning_rates=(0.000000025)
 ref_lr=0.001
+arp=1.0
 
-weight_bit_width=2
+weight_bit_width=8
 
 # -u to immediately print to stdout (for file redirect to see output before script ends)
 python -u quant_train.py \
@@ -47,6 +48,7 @@ python -u quant_train.py \
     --Q_bounds $min_Q $max_Q \
     --network_spec $network_spec \
     --ref_network_spec $ref_network_spec \
+    --arp $arp \
     --burnin $burnin \
     --n_iters $n_iters \
     --n_iters_test $n_iters_test \
