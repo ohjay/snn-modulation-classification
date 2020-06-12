@@ -197,3 +197,13 @@ class ConvNetwork(torch.nn.Module):
 
     def confusion_matrix(self, labels):
         return self.dcll_slices[-1].confusion_matrix(labels)
+
+    def print_info(self, verbose=False):
+        print('------------ Network information --------------')
+        num_params = 0
+        for param in self.parameters():
+            num_params += param.numel()
+        if verbose:
+            print(self)
+        print('Total number of parameters : %d' % num_params)
+        print('-----------------------------------------------')

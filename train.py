@@ -190,6 +190,8 @@ if __name__ == '__main__':
                 print('Loaded the SNN model from `%s`.' % args.restore_path)
             print('-' * 80)
 
+        net.print_info()
+
         net = net.to(device)
         net.reset(True)
         acc_test = np.empty([n_tests_total, n_test, len(net.dcll_slices)])
