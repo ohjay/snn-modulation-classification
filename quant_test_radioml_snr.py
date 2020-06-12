@@ -6,7 +6,8 @@ import time
 import matplotlib.pyplot as plt
 
 from dcll.pytorch_libdcll import device
-from networks import ConvNetwork, load_network_spec
+#from networks import ConvNetwork, load_network_spec
+from quant_networks import QuantConvNetwork, load_network_spec
 from data.load_radio_ml import get_radio_ml_loader as get_loader
 from data.utils import to_one_hot
 from data.utils import iq2spiketrain as to_spike_train
@@ -59,6 +60,14 @@ def parse_args():
     parser.add_argument('--netscale', type=float, default=1.,
                         metavar='N', help='scale network size')
     parser.add_argument('--print_all_confusion_matrices', action='store_true')
+    parser.add_argument('--weight_bit_width', type=int, default='8',
+                        help='Bit width for quantization of DCLL layer weights')
+    parser.add_argument('--eps0_bit_width', type=int, default='8',
+                        help='Bit width for quantization of DCLL layer state eps0')
+    parser.add_argument('--eps1_bit_width', type=int, default='16',
+                        help='Bit width for quantization of DCLL layer state eps1')
+    parser.add_argument('--forward_state_quantized', type=bool, default=False,
+                        help='Switch network to different forward path (not for training) with quantized internal state')
     return parser.parse_args()
 
 
@@ -90,7 +99,7 @@ if __name__ == '__main__':
 
         burnin = args.burnin
         convs = load_network_spec(args.network_spec)
-        net = ConvNetwork(args, im_dims, args.batch_size_test, convs, target_size,
+        net = QuantConvNetwork(args, im_dims, args.batch_size_test, convs, target_size,
                           act=torch.nn.Sigmoid(), loss=None, opt=None, opt_param={},
                           learning_rates=None, burnin=burnin)
 

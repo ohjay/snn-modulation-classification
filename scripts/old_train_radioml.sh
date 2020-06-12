@@ -29,14 +29,12 @@ batch_size=512
 batch_size_test=512
 n_test_samples=512
 n_test_interval=10
-learning_rates=(0.000000025)
+learning_rates=(0.00000000025)
 ref_lr=0.001
 arp=1.0
 
-weight_bit_width=4
-
 # -u to immediately print to stdout (for file redirect to see output before script ends)
-python -u quant_train.py \
+python -u train.py \
     --data $data \
     --radio_ml_data_dir $radio_ml_data_dir \
     --min_snr $min_snr \
@@ -56,7 +54,6 @@ python -u quant_train.py \
     --batch_size $batch_size \
     --batch_size_test $batch_size_test \
     --n_test_samples $n_test_samples \
-    --n_test_interval 5 \
+    --n_test_interval $n_test_interval \
     --learning_rates "${learning_rates[@]/#/}" \
-    --ref_lr $ref_lr \
-    --weight_bit_width $weight_bit_width
+    --ref_lr $ref_lr

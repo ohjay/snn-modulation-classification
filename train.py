@@ -275,7 +275,7 @@ if __name__ == '__main__':
             step_str = str(step).zfill(5)
             print('[TRAIN] Step {} \t Accuracy {}'.format(step_str, acc_train))
 
-           if not args.no_save:
+            if not args.no_save:
                 logfile = open(os.path.join(out_dir, 'logfile-train-accuracy.txt'), 'a')
                 logfile.write('[TRAIN] Step {} \t Accuracy {} \n'.format(step_str, acc_train))
                 logfile.close()

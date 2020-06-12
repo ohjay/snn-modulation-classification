@@ -22,7 +22,7 @@ batch_size_test=512
 n_test_samples=512
 arp=1.0
 
-python -u test_radioml.py \
+python -u quant_test_radioml_snr.py \
     --radio_ml_data_dir $radio_ml_data_dir \
     --per_h5_frac $per_h5_frac \
     --train_frac $train_frac \

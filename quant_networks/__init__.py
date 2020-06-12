@@ -122,7 +122,6 @@ class QuantConvNetwork(torch.nn.Module):
                  loss, opt, opt_param, learning_rates,
                  DCLLSlice=DCLLClassification,
                  burnin=50,
-                 weight_bit_width=8
                  ):
         super(QuantConvNetwork, self).__init__()
         self.batch_size = batch_size
@@ -206,6 +205,7 @@ class QuantConvNetwork(torch.nn.Module):
             # else:
             #     s, s.optimizer = amp.initialize(s, s.optimizer, opt_level='O1', num_losses=self.num_layers)
             self.dcll_slices.append(s)
+        
 
     def learn(self, x, labels):
         # with torch.autograd.detect_anomaly():
