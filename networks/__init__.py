@@ -197,6 +197,7 @@ class ConvNetwork(torch.nn.Module):
             # else:
             #     s, s.optimizer = amp.initialize(s, s.optimizer, opt_level='O1', num_losses=self.num_layers)
             self.dcll_slices.append(s)
+        
 
     def learn(self, x, labels):
         spikes = x
