@@ -180,9 +180,14 @@ if __name__ == '__main__':
     if not args.just_ref:
         burnin = args.burnin
         convs = load_network_spec(args.network_spec)
-        net = ConvNetwork(args, im_dims, args.batch_size, convs, target_size,
+        net = ConvNetwork(args, im_dims, args.batch_size_test, convs, target_size,
                           act=torch.nn.Sigmoid(), loss=loss, opt=opt, opt_param=opt_param,
                           learning_rates=args.learning_rates, burnin=burnin)
+        #net = ConvNetwork(args, im_dims, args.batch_size_test, convs, target_size,
+        #                  act=torch.nn.Sigmoid(), loss=None, opt=None, opt_param={},
+        #                  learning_rates=None, burnin=burnin)
+
+
 
         if args.restore_path:
             print('-' * 80)

@@ -20,7 +20,6 @@ from collections import namedtuple
 import logging
 from collections import Counter
 import math
-from apex import amp
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

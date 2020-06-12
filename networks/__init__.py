@@ -2,7 +2,6 @@ import yaml
 import torch
 import numpy as np
 from ast import literal_eval as make_tuple
-from apex import amp
 
 from dcll.pytorch_libdcll import Conv2dDCLLlayer, DenseDCLLlayer, device, DCLLClassification
 
