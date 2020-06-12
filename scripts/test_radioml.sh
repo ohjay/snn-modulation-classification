@@ -2,6 +2,9 @@
 
 radio_ml_data_dir="/lif/radioml/2018.01/"
 
+per_h5_frac=0.5
+train_frac=0.9
+
 I_resolution=16
 Q_resolution=16
 min_I=-1.0
@@ -13,7 +16,6 @@ network_spec="networks/radio_ml_conv.yaml"
 restore_path="results/RadioML/Jun04_13-04-30/parameters_260.pth"
 #restore_path="results/RadioML/May27_11-47-00/parameters_155.pth"
 
-
 burnin=20
 n_iters_test=1024
 batch_size_test=512
@@ -22,11 +24,14 @@ arp=1.0
 
 python -u test_radioml.py \
     --radio_ml_data_dir $radio_ml_data_dir \
+    --per_h5_frac $per_h5_frac \
+    --train_frac $train_frac \
     --I_resolution $I_resolution \
     --Q_resolution $Q_resolution \
     --I_bounds $min_I $max_I \
     --Q_bounds $min_Q $max_Q \
     --network_spec $network_spec \
+    --arp $arp \
     --restore_path $restore_path \
     --burnin $burnin \
     --n_iters_test $n_iters_test \

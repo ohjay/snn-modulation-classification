@@ -5,6 +5,7 @@ import os
 import argparse
 import datetime
 from tensorboardX import SummaryWriter
+import time
 
 import subprocess # execute git command
 
@@ -86,7 +87,7 @@ def parse_args():
                         help='randomize time constants in convolutional layers')
     parser.add_argument('--beta', type=float, default=.95,
                         metavar='N', help='Beta2 parameters for Adamax')
-    parser.add_argument('--lc_ampl', type=float, default=.5,
+    parser.add_argument('--lc_ampl', type=float, default=0.5,
                         metavar='N', help='magnitude of local classifier init')
     parser.add_argument('--netscale', type=float, default=1.,
                         metavar='N', help='scale network size')
@@ -153,7 +154,9 @@ if __name__ == '__main__':
             to_st_kwargs['min_Q'] = args.Q_bounds[0]
             to_st_kwargs['max_Q'] = args.Q_bounds[1]
         to_st_train_kwargs['max_duration'] = n_iters
+        to_st_train_kwargs['gs_stdev'] = 0
         to_st_test_kwargs['max_duration'] = n_iters_test
+        to_st_test_kwargs['gs_stdev'] = 0
 
     # number of test samples: n_test * batch_size_test
     n_test = np.ceil(float(args.n_test_samples) /
@@ -162,8 +165,14 @@ if __name__ == '__main__':
                             args.n_test_interval).astype(int)
 
     opt = getattr(torch.optim, args.optim_type)
-    opt_param = {'betas': [0.0, args.beta]}
-    ref_opt_param = {'lr': args.ref_lr, 'betas': [0.0, args.beta]}
+    opt_param = {
+        'betas': [0.0, args.beta],
+        'weight_decay': 10.0,
+    }
+    ref_opt_param = {
+        'lr': args.ref_lr,
+        'betas': [0.0, args.beta],
+    }
     loss = getattr(torch.nn, args.loss_type)
 
     if not args.just_ref:
@@ -216,15 +225,18 @@ if __name__ == '__main__':
     acc_test = np.empty([n_tests_total, n_test, len(net.dcll_slices)])
     acc_test_ref = np.empty([n_tests_total, n_test])
 
-    train_data = get_loader(args.batch_size, train=True, taskid=0, **get_loader_kwargs)
+    train_data = get_loader(args.batch_size, train=True, **get_loader_kwargs)
+
     gen_train = iter(train_data)
-    gen_test = iter(get_loader(args.batch_size_test, train=False, taskid=1, **get_loader_kwargs))
+    gen_test = iter(get_loader(args.batch_size_test, train=False, **get_loader_kwargs))
 
     all_test_data = [next(gen_test) for i in range(n_test)]
     all_test_data = [(samples, to_one_hot(labels, target_size))
                      for (samples, labels) in all_test_data]
 
     print("\n\nStart Training\n")
+
+    label_train_counts = np.zeros(target_size, dtype=int)
 
     for step in range(args.n_steps):
         print("Minibatch step {}".format(step))
@@ -242,11 +254,15 @@ if __name__ == '__main__':
         except StopIteration:
             gen_train = iter(train_data)
             input, labels = next(gen_train)
+        for label in labels:
+            label_train_counts[label] += 1
         labels = to_one_hot(labels, target_size)
 
         print("Before to_spike_train {}".format(time.time() - start))
 
         if not args.just_ref:
+            n_iters_sampled = n_iters  # np.random.randint(args.burnin + 1, n_iters + 1)
+            to_st_train_kwargs['max_duration'] = n_iters_sampled
             input_spikes, labels_spikes = to_spike_train(input, labels,
                                                          **to_st_train_kwargs)
             input_spikes = torch.Tensor(input_spikes).to(device)
@@ -255,9 +271,12 @@ if __name__ == '__main__':
             # Train
             net.reset()
             net.train()
-            for sim_iteration in range(n_iters):
+            for sim_iteration in range(n_iters_sampled):
                 net.learn(x=input_spikes[sim_iteration],
                           labels=labels_spikes[sim_iteration])
+            acc_train = net.accuracy(labels_spikes)
+            step_str = str(step).zfill(5)
+            print('[TRAIN] Step {} \t Accuracy {}'.format(step_str, acc_train))
 
         ref_input = torch.Tensor(input).to(device).reshape(-1, *ref_im_dims)
         ref_label = torch.Tensor(labels).to(device)
@@ -296,13 +315,13 @@ if __name__ == '__main__':
                         print('Exception: ' + str(e) +
                               '. Try to decrease your batch_size_test with the --batch_size_test argument.')
                         raise
-                    test_labels1h = torch.Tensor(test_labels).to(device)
+                    test_labels = torch.Tensor(test_labels).to(device)
 
                     net.reset()
                     net.eval()
                     for sim_iteration in range(n_iters_test):
                         net.test(x=test_input[sim_iteration])
-                    acc_test[test_idx, i, :] = net.accuracy(test_labels1h)
+                    acc_test[test_idx, i, :] = net.accuracy(test_labels)
 
                     if i == 0:
                         net.write_stats(writer, step, comment='_batch_'+str(i))
@@ -335,10 +354,13 @@ if __name__ == '__main__':
                 acc = 'N/A'
             acc_ref = np.mean(acc_test_ref[test_idx], axis=0)
 
-            print('Step {} \t Accuracy {} \t Ref {}'.format(step, acc, acc_ref))
+            print('[TEST]  Step {} \t Accuracy {} \t Ref {}'.format(step, acc, acc_ref))
             if not args.no_save:
                 logfile = open(os.path.join(out_dir, 'logfile-accuracy.txt'), 'a')
-                logfile.write('Step {} \t Accuracy {} \t Ref {}\n'.format(step, acc, acc_ref))
+                logfile.write('[TEST] Step {} \t Accuracy {} \t Ref {}\n'.format(step, acc, acc_ref))
                 logfile.close()
+            print('Label train percentages:')
+            label_train_percentages = label_train_counts / np.sum(label_train_counts) * 100
+            print(np.array2string(label_train_percentages, max_line_width=300, precision=1))
 
     writer.close()
