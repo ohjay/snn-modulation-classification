@@ -79,3 +79,8 @@ iq_plot.png
 spike_train.gif
 plots/
 logs/
+.ipynb_checkpoints/
+__MACOSX/
+digits/
+digits.zip
+*.mov

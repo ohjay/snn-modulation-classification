@@ -25,7 +25,7 @@ n_test_samples=512
 n_test_interval=10
 learning_rates=(0.00000000025)
 ref_lr=0.001
-arp=1.0
+arp=0.35
 
 python3 train.py \
     --data $data \

@@ -50,9 +50,6 @@ def get_predictions_by_vote(pvoutput, labels):
     for i in range(n):
         predictions_by_vote[i] = Counter(pvoutput_[i]).most_common(1)[0][0]
         labels_by_vote[i] = Counter(labels_[i]).most_common(1)[0][0]
-        # print(pvoutput_[i])
-        # print(predictions_by_vote[i], labels_by_vote[i])
-        # sys.exit(0)
     return predictions_by_vote, labels_by_vote
 
 
@@ -335,7 +332,7 @@ class ContinuousConv2D(nn.Module):
         self.act = act
         self.spiking = spiking
         if spiking:
-            self.output_act = lambda x: (x > 0).float()
+            self.output_act = lambda x: (x >= 0).float()
         else:
             self.output_act = lambda x: x
 
@@ -430,7 +427,7 @@ class ContinuousConv2D(nn.Module):
 
 
 class ContinuousRelativeRefractoryConv2D(ContinuousConv2D):
-    NeuronState = namedtuple('NeuronState', ('eps0', 'eps1', 'arp'))
+    NeuronState = namedtuple('NeuronState', ('eps0', 'eps1', 'arp', 'output'))
 
     def __init__(self,
                  in_channels,
@@ -474,6 +471,7 @@ class ContinuousRelativeRefractoryConv2D(ContinuousConv2D):
             eps0=torch.zeros(input_shape).to(device)+init_value,
             eps1=torch.zeros(input_shape).to(device)+init_value,
             arp=torch.zeros(output_shape).to(device),
+            output=torch.zeros(output_shape).to(device),
         )
 
         if self.random_tau:
@@ -490,23 +488,22 @@ class ContinuousRelativeRefractoryConv2D(ContinuousConv2D):
                            .format(self.state.eps0.shape[0], input.shape[0]))
             self.init_state(input.shape[0], input.shape[2:4])
 
-        eps0 = input*self.tau_s__dt + self.alphas * self.state.eps0
-        eps1 = self.alpha * self.state.eps1 + eps0*self.tau_m__dt
+        eps0 = self.alphas * self.state.eps0 + input * self.tau_s__dt  # Q in paper
+        eps1 = self.alpha * self.state.eps1 + self.tau_m__dt * self.state.eps0  # P in paper
+        arp = self.alpharp * self.state.arp - self.wrp * self.state.output  # R in paper
         pvmem = F.conv2d(eps1, self.weight, self.bias, self.stride,
-                         self.padding, self.dilation, self.groups)
-        arp = self.alpharp*self.state.arp
-        outpvmem = pvmem+arp
-        output = (outpvmem > 0).float()
-        pv = self.act(outpvmem)
+                         self.padding, self.dilation, self.groups) + arp  # U in paper
+        pv = self.act(pvmem)
+        output = self.output_act(pvmem)  # S in paper
         if not self.spiking:
             raise Exception('Refractory not allowed in non-spiking mode')
-        arp -= output*self.wrp
         self.state = self.NeuronState(
             eps0=eps0.detach(),
             eps1=eps1.detach(),
-            arp=arp.detach())
+            arp=arp.detach(),
+            output=output.detach())
 
-        return output, pv, outpvmem
+        return output, pv, pvmem
 
 
 class Conv2dDCLLlayer(nn.Module):

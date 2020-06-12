@@ -11,13 +11,13 @@ min_Q=-1.0
 max_Q=1.0
 
 network_spec="networks/radio_ml_conv.yaml"
-restore_path="results/RadioML/Jun04_13-04-30/parameters_260.pth"
+restore_path="results/RadioML/Jun12_06-28-21/parameters_180.pth"
 
 burnin=20
 n_iters_test=1024
 batch_size_test=512
 n_test_samples=512
-arp=1.0
+arp=0.35
 
 python3 test_radio_ml.py \
     --radio_ml_data_dir $radio_ml_data_dir \
