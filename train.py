@@ -240,7 +240,6 @@ if __name__ == '__main__':
 
     for step in range(args.n_steps):
         print("Minibatch step {}".format(step))
-        start = time.time()
         if ((step + 1) % 1000) == 0:
             if not args.just_ref:
                 for i in range(len(net.dcll_slices)):
@@ -257,8 +256,6 @@ if __name__ == '__main__':
         for label in labels:
             label_train_counts[label] += 1
         labels = to_one_hot(labels, target_size)
-
-        print("Before to_spike_train {}".format(time.time() - start))
 
         if not args.just_ref:
             n_iters_sampled = n_iters  # np.random.randint(args.burnin + 1, n_iters + 1)
@@ -278,29 +275,10 @@ if __name__ == '__main__':
             step_str = str(step).zfill(5)
             print('[TRAIN] Step {} \t Accuracy {}'.format(step_str, acc_train))
 
-        ref_input = torch.Tensor(input).to(device).reshape(-1, *ref_im_dims)
-        ref_label = torch.Tensor(labels).to(device)
-
-        print("Before train {}".format(time.time() - start))
-        # Train
-        net.reset()
-        net.train()
-        for sim_iteration in range(n_iters):
-            if (sim_iteration % 50 == 0):
-                print("Iteration {} time: {}:".format(sim_iteration, time.time() - start))
-            net.learn(x=input_spikes[sim_iteration],
-                      labels=labels_spikes[sim_iteration])
-
-        ref_net.train()
-        ref_net.learn(x=ref_input, labels=ref_label)
-
-        acc = net.accuracy(labels_spikes)
-        print("Step {} Training accuracy: {}".format(step, acc))
-
-        if not args.no_save:
-            logfile = open(os.path.join(out_dir, 'logfile-train-accuracy.txt'), 'a')
-            logfile.write('Step {} \t Accuracy {} \n'.format(step, acc))
-            logfile.close()
+           if not args.no_save:
+                logfile = open(os.path.join(out_dir, 'logfile-train-accuracy.txt'), 'a')
+                logfile.write('[TRAIN] Step {} \t Accuracy {} \n'.format(step_str, acc_train))
+                logfile.close()
 
         # Test
         if (step % args.n_test_interval) == 0:

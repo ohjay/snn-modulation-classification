@@ -8,8 +8,6 @@ from dcll.pytorch_libdcll import DenseDCLLlayer, device, DCLLClassification
 from .quant_conv2d import QuantConv2dDCLLlayer
 
 
-
-
 def load_network_spec(yaml_path):
     network_spec = yaml.load(open(yaml_path, 'r'))
     convs = network_spec['conv_layers']
@@ -44,10 +42,9 @@ class ReferenceConvNetwork(torch.nn.Module):
                                 out_channels=int(out_channels * args.netscale),
                                 kernel_size=kernel_size,
                                 padding=padding),
+                torch.nn.ReLU(),
                 torch.nn.MaxPool2d(
-                    kernel_size=pooling, stride=pooling, padding=pool_pad),
-                torch.nn.BatchNorm2d(int(out_channels * args.netscale)),
-                torch.nn.ReLU()
+                    kernel_size=pooling, stride=pooling, padding=pool_pad)
             )
             layer = layer.to(device)
             return (layer, [out_channels])
@@ -67,40 +64,24 @@ class ReferenceConvNetwork(torch.nn.Module):
             return x.shape[1:]
 
         # Should we train linear decoders? They are not in DCLL
-        self.linear1 = torch.nn.Sequential(
-            torch.nn.Linear(np.prod(latent_size()), 128),
-            torch.nn.BatchNorm1d(128),
-            torch.nn.SELU()
-        ).to(device)
-
-        self.linear2 = torch.nn.Sequential(
-            torch.nn.Linear(128, 128),
-            torch.nn.BatchNorm1d(128),
-            torch.nn.SELU()
-        ).to(device)
-
-        self.linear3 = torch.nn.Sequential(
-            torch.nn.Linear(128, out_dim),
-            torch.nn.Softmax()
-        ).to(device)
+        self.linear = torch.nn.Linear(np.prod(latent_size()), out_dim).to(device)
+        self.linear.weight.requires_grad = True
+        self.linear.bias.requires_grad = True
 
         self.optim = opt(self.parameters(), **opt_param)
-        self.crit = torch.nn.NLLLoss().to(device)
+        self.crit = loss().to(device)
 
     def forward(self, x):
         for layer in self.layers:
             x = layer(x)
-        x = x.view(x.shape[0], -1)
-        x = self.linear1(x)
-        x = self.linear2(x)
-        x = self.linear3(x)
+        x = self.linear(x.view(x.shape[0], -1))
         return x
 
     def learn(self, x, labels):
         y = self.forward(x)
 
         self.optim.zero_grad()
-        loss = self.crit(y, labels.argmax(1))
+        loss = self.crit(y, labels)
         loss.backward()
         self.optim.step()
 
@@ -148,7 +129,7 @@ class QuantConvNetwork(torch.nn.Module):
                                     wrp=args.arp, act=act, lc_ampl=args.lc_ampl,
                                     random_tau=args.random_tau,
                                     spiking=True,
-                                    lc_dropout=False,
+                                    lc_dropout=.5,
                                     output_layer=is_output_layer,
                                     weight_bit_width=args.weight_bit_width,
                                     eps0_bit_width=args.eps0_bit_width,
@@ -160,10 +141,14 @@ class QuantConvNetwork(torch.nn.Module):
         '''
         n = im_dims
         self.num_layers = len(convs)
-        self.dcll_slices = torch.nn.ModuleList()
+        self.layers = torch.nn.ModuleList()
         for i in range(self.num_layers):
             is_output_layer = (i == self.num_layers - 1)
             layer, n = make_conv(n, convs[i], is_output_layer)
+            self.layers.append(layer)
+
+        self.dcll_slices = []
+        for i, layer in enumerate(self.layers):
             layer_opt_param = opt_param.copy()
             if learning_rates is not None:
                 lr_idx = min(i, len(learning_rates) - 1)
@@ -207,17 +192,18 @@ class QuantConvNetwork(torch.nn.Module):
             #     s, s.optimizer = amp.initialize(s, s.optimizer, opt_level='O1', num_losses=self.num_layers)
             self.dcll_slices.append(s)
 
+
+
     def learn(self, x, labels):
-        # with torch.autograd.detect_anomaly():
         spikes = x
         for s in self.dcll_slices:
             spikes, _, _, _, _ = s.train_dcll(
-                spikes, labels, regularize=False)  # 0.1)
+                spikes, labels, regularize=False)
 
     def test(self, x):
         spikes = x
         for s in self.dcll_slices:
-            spikes, _, _, _ = s.forward(spikes, ignore_burnin=True)
+            spikes, _, _, _ = s.forward(spikes)
 
     def reset(self, init_states=False):
         for s in self.dcll_slices:
@@ -229,9 +215,3 @@ class QuantConvNetwork(torch.nn.Module):
 
     def accuracy(self, labels):
         return [s.accuracy(labels) for s in self.dcll_slices]
-
-    def predictions(self):
-        return [s.predictions() for s in self.dcll_slices]
-
-    def confusion_matrix(self, labels):
-        return self.dcll_slices[-1].confusion_matrix(labels)
